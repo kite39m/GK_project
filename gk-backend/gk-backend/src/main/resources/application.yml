@@ -1,7 +1,7 @@
 spring:
   # 数据库连接配置
   datasource:
-    # 这里的 3306 是 MySQL 默认端口，gk_db 是你刚才建的数据库名
+    # 这里的 3306 是 MySQL 默认端口，gk_db 是数据库名
     url: jdbc:mysql://localhost:3306/gk_db?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
     # 这里填写你本地 MySQL 的账号，通常是 root
     username: root

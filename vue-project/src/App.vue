@@ -1,11 +1,10 @@
 <template>
-  <NavBar />
+  <NavBar v-if="!$route.meta.hideNav" />
   
   <router-view />
 </template>
 
 <script setup>
-// 引入导航栏组件
 import NavBar from './components/NavBar.vue'
 </script>
 
@@ -19,7 +18,6 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* 隐藏自带的那个导致页面偏向中间的默认 #app 样式 */
 #app {
   max-width: none;
   margin: 0;

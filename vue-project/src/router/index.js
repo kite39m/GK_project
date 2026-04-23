@@ -1,14 +1,19 @@
 import { createRouter, createWebHistory } from 'vue-router'
-// 导入三个页面组件
 import HomeView from '../views/HomeView.vue'
 import BankView from '../views/BankView.vue'
 import PracticeView from '../views/PracticeView.vue'
+import LoginView from '../views/LoginView.vue'
 
 const router = createRouter({
-  // 使用 HTML5 模式的路由（网址中没有丑陋的 # 号）
   history: createWebHistory(import.meta.env.BASE_URL),
-  // 定义路径和页面的映射关系
   routes: [
+    {
+      path: '/login',
+      name: 'login',
+      component: LoginView,
+      // 🌟 新增：告诉系统，这个页面不需要显示导航栏
+      meta: { hideNav: true } 
+    },
     {
       path: '/',
       name: 'home',
@@ -25,6 +30,20 @@ const router = createRouter({
       component: PracticeView
     }
   ]
+})
+
+// 路由守卫：登录拦截
+router.beforeEach((to, from, next) => {
+  if (to.name !== 'login') {
+    const token = localStorage.getItem('token')
+    if (!token) {
+      next({ name: 'login' })
+    } else {
+      next()
+    }
+  } else {
+    next()
+  }
 })
 
 export default router
