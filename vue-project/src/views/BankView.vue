@@ -3,6 +3,14 @@
     <h2>专项题库中心</h2>
     <p class="desc">请选择你要攻克的模块：</p >
     <div class="module-list">
+      
+      <div 
+        class="module-card mistake-card" 
+        @click="$router.push({ path: '/practice', query: { mode: 'mistake' } })"
+      >
+        ⚔️ 清理我的错题本
+      </div>
+
       <div class="module-card">行测：资料分析（速算）</div>
       <div class="module-card">行测：言语理解</div>
       <div class="module-card">申论：金句素材背诵</div>
@@ -40,5 +48,14 @@
   background-color: #67c23a;
   color: white;
   transform: translateX(10px);
+}
+.mistake-card {
+  background-color: #fef0f0;
+  border-color: #f56c6c;
+  color: #f56c6c;
+}
+.mistake-card:hover {
+  background-color: #f56c6c;
+  color: white;
 }
 </style>

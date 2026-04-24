@@ -3,7 +3,7 @@
     <div class="nav-container">
       <div class="brand">
         <span class="logo-dot"></span>
-        <span class="logo-text">Gemini</span>
+        <span class="logo-text">GK</span>
       </div>
 
       <nav class="nav-links">
@@ -14,7 +14,7 @@
           <span>速算</span>
         </router-link>
         <router-link to="/bank" class="nav-item">
-          <span>选岗与备考策略</span>
+          <span>模块</span>
         </router-link>
        
       </nav>

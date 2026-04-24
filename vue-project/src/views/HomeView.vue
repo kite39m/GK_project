@@ -1,137 +1,444 @@
 <template>
-  <div class="page-container">
-    <div class="content-wrapper">
-      <header class="hero-section">
-        <h1 class="title">欢迎来到你的专属题库。</h1>
-        <p class="subtitle">目标 2027 年国考，稳扎稳打，步步为营。</p >
-      </header>
+  <div class="dashboard">
+    <div class="dashboard-inner">
 
-      <main class="dashboard-container">
-        <div class="dashboard-card">
-          <div class="card-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
-              <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
-              <path d="M18 12H9" />
-            </svg>
+      <!-- Loading -->
+      <div v-if="loading" class="loading-state">
+        <div class="spinner"></div>
+        <p>正在加载数据看板...</p>
+      </div>
+
+      <!-- Error -->
+      <div v-else-if="error" class="error-state">
+        <p>数据加载失败，请确认后端已启动</p>
+        <button class="btn-retry" @click="fetchSummary">重试</button>
+      </div>
+
+      <!-- Dashboard Content -->
+      <template v-else>
+        <header class="hero">
+          <h1 class="hero-title">欢迎回来</h1>
+          <p class="hero-subtitle">遇见不一样的自己</p>
+        </header>
+
+        <!-- Stats Row -->
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-label">总题量</div>
+            <div class="stat-value">{{ summary.totalQuestions }}</div>
           </div>
-          <h2 class="card-title">训练数据概览</h2>
-          <p class="card-desc">这里未来将展示你的刷题总数据、正确率趋势与成长轨迹。</p >
+          <div class="stat-card">
+            <div class="stat-label">正确率</div>
+            <div class="stat-value" :class="accuracyClass">
+              {{ summary.accuracy }}<span class="unit">%</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">平均用时</div>
+            <div class="stat-value">{{ avgTimeDisplay }}<span class="unit">/题</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">综合熟练度</div>
+            <div class="stat-value" :class="masteryClass">
+              {{ overallMastery }}<span class="unit">%</span>
+            </div>
+          </div>
         </div>
-      </main>
+
+        <!-- Bento Grid -->
+        <div class="bento-grid">
+          <div class="bento-card chart-card">
+            <h3 class="card-heading">能力画像</h3>
+            <p class="card-desc">各模块熟练度雷达图</p>
+            <div ref="chartRef" class="chart-container"></div>
+          </div>
+
+          <div class="bento-card actions-card">
+            <h3 class="card-heading">快速操作</h3>
+            <p class="card-desc">继续你的学习计划</p>
+            <div class="action-list">
+              <button class="action-btn primary" @click="$router.push('/practice')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                开始随机模考
+              </button>
+              <button class="action-btn secondary" @click="$router.push('/practice?mode=mistake')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
+                清理错题本
+              </button>
+              <button class="action-btn tertiary" @click="$router.push('/bank')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                选岗与备考策略
+              </button>
+            </div>
+          </div>
+        </div>
+      </template>
+
     </div>
   </div>
 </template>
 
+<script setup>
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import axios from 'axios'
+import * as echarts from 'echarts'
+
+const chartRef = ref(null)
+let chartInstance = null
+
+const loading = ref(true)
+const error = ref(false)
+const summary = ref({
+  totalQuestions: 0,
+  accuracy: 0,
+  avgTime: 0,
+  skillValues: [100, 100, 100, 100, 100]
+})
+
+const overallMastery = computed(() => {
+  const vals = summary.value.skillValues
+  if (!vals || vals.length === 0) return 0
+  return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length)
+})
+
+const accuracyClass = computed(() => {
+  const v = summary.value.accuracy
+  if (v >= 80) return 'text-success'
+  if (v >= 50) return 'text-warning'
+  return 'text-danger'
+})
+
+const masteryClass = computed(() => {
+  const v = overallMastery.value
+  if (v >= 80) return 'text-success'
+  if (v >= 50) return 'text-warning'
+  return 'text-danger'
+})
+
+const avgTimeDisplay = computed(() => {
+  return summary.value.avgTime > 0 ? summary.value.avgTime : '--'
+})
+
+const radarIndicators = [
+  { name: '言语理解', max: 100 },
+  { name: '数量关系', max: 100 },
+  { name: '判断推理', max: 100 },
+  { name: '资料分析', max: 100 },
+  { name: '常识判断', max: 100 }
+]
+
+const CHART_COLOR = '#111111'
+
+const initChart = () => {
+  if (!chartRef.value) return
+  if (chartInstance) chartInstance.dispose()
+
+  chartInstance = echarts.init(chartRef.value)
+  const option = {
+    radar: {
+      indicator: radarIndicators,
+      center: ['50%', '50%'],
+      radius: '70%',
+      splitNumber: 4,
+      axisName: {
+        color: '#666',
+        fontSize: 12,
+        fontWeight: 500
+      },
+      splitArea: {
+        areaStyle: {
+          color: ['rgba(0,0,0,0.02)', 'rgba(0,0,0,0.04)']
+        }
+      },
+      axisLine: {
+        lineStyle: { color: 'rgba(0,0,0,0.08)' }
+      },
+      splitLine: {
+        lineStyle: { color: 'rgba(0,0,0,0.08)' }
+      }
+    },
+    series: [{
+      type: 'radar',
+      data: [{
+        value: summary.value.skillValues,
+        name: '熟练度',
+        areaStyle: {
+          color: 'rgba(0,0,0,0.08)'
+        },
+        lineStyle: {
+          color: CHART_COLOR,
+          width: 2
+        },
+        itemStyle: {
+          color: CHART_COLOR
+        }
+      }],
+      symbol: 'circle',
+      symbolSize: 6
+    }]
+  }
+
+  chartInstance.setOption(option)
+  chartInstance.resize()
+}
+
+const handleResize = () => {
+  chartInstance?.resize()
+}
+
+const fetchSummary = async () => {
+  loading.value = true
+  error.value = false
+  try {
+    const res = await axios.get('http://localhost:8080/api/stats/summary')
+    summary.value = res.data
+  } catch {
+    error.value = true
+    summary.value = { totalQuestions: 0, accuracy: 0, avgTime: 0, skillValues: [100, 100, 100, 100, 100] }
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(async () => {
+  await fetchSummary()
+  await nextTick()
+  initChart()
+  window.addEventListener('resize', handleResize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  chartInstance?.dispose()
+})
+
+watch(() => summary.value.skillValues, () => {
+  nextTick(() => initChart())
+})
+</script>
+
 <style scoped>
-/* 引入类似 Claude 的无衬线字体体系 */
-.page-container {
+/* ===== Layout ===== */
+.dashboard {
   min-height: 100vh;
-  background-color: #ffffff; /* 纯白背景 */
+  background-color: #ffffff;
   display: flex;
   justify-content: center;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   color: #1a1a1a;
 }
 
-.content-wrapper {
+.dashboard-inner {
   width: 100%;
-  max-width: 860px; /* 限制最大宽度，保证阅读舒适度 */
-  padding: 12vh 24px 60px;
+  max-width: 960px;
+  padding: 10vh 24px 60px;
 }
 
-/* --- 排版呼吸感 --- */
-.hero-section {
+/* ===== Loading / Error ===== */
+.loading-state, .error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 120px 0;
+  color: #888;
+  gap: 16px;
+}
+
+.spinner {
+  width: 32px; height: 32px;
+  border: 3px solid #f3f3f3; border-top: 3px solid #111;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+.btn-retry {
+  padding: 10px 28px;
+  border-radius: 999px;
+  border: 1px solid #ddd;
+  background: #fff;
+  color: #333;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-retry:hover { background: #f5f5f5; }
+
+/* ===== Hero ===== */
+.hero {
   text-align: center;
-  margin-bottom: 64px;
-  animation: fadeIn 0.8s ease-out;
+  margin-bottom: 48px;
+  animation: fadeIn 0.6s ease-out;
 }
 
-.title {
-  font-size: 2.5rem;
+.hero-title {
+  font-size: 2.25rem;
   font-weight: 600;
-  letter-spacing: -0.02em; /* 轻微收缩字间距，提升高级感 */
-  color: #111111;
-  margin-bottom: 16px;
+  letter-spacing: -0.02em;
+  color: #111;
+  margin-bottom: 8px;
   line-height: 1.2;
 }
 
-.subtitle {
-  font-size: 1.125rem;
+.hero-subtitle {
+  font-size: 1.05rem;
+  color: #888;
   font-weight: 400;
-  color: #666666; /* 柔和的次要文本颜色 */
-  letter-spacing: 0.01em;
-  line-height: 1.6;
 }
 
-/* --- 极简卡片设计 --- */
-.dashboard-container {
-  display: flex;
-  justify-content: center;
-  animation: fadeIn 1s ease-out 0.2s both; /* 错落出现的动画，增加质感 */
+/* ===== Stats Row ===== */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 32px;
+  animation: fadeIn 0.6s ease-out 0.1s both;
 }
 
-.dashboard-card {
-  width: 100%;
-  max-width: 640px;
-  background-color: #ffffff;
-  border: 1px solid #eaeaea; /* 极浅的边框代替生硬的背景色 */
+.stat-card {
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
   border-radius: 16px;
-  padding: 48px;
+  padding: 24px 20px;
   text-align: center;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.02); /* 几乎察觉不到的弥散阴影 */
+  transition: all 0.25s ease;
 }
 
-.dashboard-card:hover {
-  border-color: #dcdcdc;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.04);
+.stat-card:hover {
+  border-color: #e0e0e0;
   transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.03);
 }
 
-.card-icon {
-  width: 48px;
-  height: 48px;
-  margin: 0 auto 24px;
-  color: #1a1a1a;
-  opacity: 0.8;
-}
-
-.card-title {
-  font-size: 1.25rem;
+.stat-label {
+  font-size: 13px;
   font-weight: 500;
-  color: #111111;
-  margin-bottom: 12px;
+  color: #999;
+  margin-bottom: 10px;
+  letter-spacing: 0.02em;
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #111;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.stat-value .unit {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #bbb;
+}
+
+.text-success { color: #10b981; }
+.text-warning { color: #f59e0b; }
+.text-danger  { color: #ef4444; }
+
+/* ===== Bento Grid ===== */
+.bento-grid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 20px;
+  animation: fadeIn 0.6s ease-out 0.2s both;
+}
+
+.bento-card {
+  background: #ffffff;
+  border: 1px solid #eaeaea;
+  border-radius: 20px;
+  padding: 28px;
+  transition: all 0.25s ease;
+}
+
+.bento-card:hover {
+  border-color: #dcdcdc;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.03);
+}
+
+.card-heading {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #111;
+  margin-bottom: 4px;
   letter-spacing: -0.01em;
 }
 
 .card-desc {
-  font-size: 1rem;
-  color: #888888;
-  line-height: 1.6;
-  max-width: 80%;
-  margin: 0 auto;
+  font-size: 0.9rem;
+  color: #aaa;
+  margin-bottom: 20px;
 }
 
-/* 优雅的入场动画 */
+/* ===== Radar Chart ===== */
+.chart-container {
+  width: 100%;
+  height: 300px;
+}
+
+/* ===== Quick Actions ===== */
+.action-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 16px 20px;
+  border-radius: 14px;
+  border: 1px solid #eaeaea;
+  background: #fff;
+  font-size: 15px;
+  font-weight: 500;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.action-btn:hover {
+  transform: translateY(-1px);
+}
+
+.action-btn.primary {
+  background: #111;
+  color: #fff;
+  border-color: #111;
+}
+.action-btn.primary:hover { background: #2a2a2a; }
+
+.action-btn.secondary {
+  background: #fef8f8;
+  color: #dc2626;
+  border-color: #fee2e2;
+}
+.action-btn.secondary:hover { background: #fef0f0; }
+
+.action-btn.tertiary {
+  background: #fafafa;
+}
+.action-btn.tertiary:hover { background: #f0f0f0; }
+
+/* ===== Animation ===== */
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-/* 响应式调整 */
-@media (max-width: 640px) {
-  .title {
-    font-size: 2rem;
-  }
-  .dashboard-card {
-    padding: 32px 20px;
-  }
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+  .dashboard-inner { padding: 6vh 16px 40px; }
+  .hero-title { font-size: 1.75rem; }
+  .stats-row { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .bento-grid { grid-template-columns: 1fr; }
+  .stat-value { font-size: 1.6rem; }
 }
 </style>
