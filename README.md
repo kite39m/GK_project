@@ -1,104 +1,26 @@
-# GK 题库训练与错题本系统（Vue + Spring Boot）
+# 🎯 GK-Diagnosis-Agent (国考行测速算智能推演系统)
 
+> 💡 **项目愿景**：打破传统公务员考试备考中“资料分析”模块的题海战术，通过多 Agent 协同，为考生提供针对“截位直除”、“差分法”等速算技巧的个性化长链推演与纠错。
 
+**👤 开发者**: 赵文阳 
 
-## 1. 一句话概述
-基于 `Vue3` + `Spring Boot` 搭建的题库训练平台：支持随机模考/专项训练、错题记录与斩杀掌握机制，并通过后端聚合统计输出 5 维熟练度雷达图，形成“训练-复盘-提升”的闭环。
+## 🏗️ 核心架构与技术栈
+本项目采用前后端分离架构，核心业务流由 AI大模型节点驱动：
+*   **前端交互**: Vue 3 + Vite + Vue Router (提供草稿录入与富文本推演展示)
+*   **后端服务**: Spring Boot + MyBatis-Plus + JWT 鉴权
+*   **AI 调度层**: 规划中的多 Agent 协作网络 (Diagnostic Agent, Strategy Agent, Variant Agent)
 
-## 2. 项目亮点
-- 前后端分离的全栈应用：`Vue + axios` 调用后端 REST API，实现题库获取、作答追踪、错题本管理与统计看板。
-- 基于 `JWT` 的统一鉴权：在后端使用 `HandlerInterceptor` 拦截 `/api/**` 请求，前端 axios 拦截器自动携带 `Authorization: Bearer <token>`，登录失败（401）自动跳转登录页。
-- 题库训练能力：支持
-  - 随机模考（后端 `ORDER BY RAND() LIMIT 10`）
-  - 专项训练（按 `category` 精准查询）
-- 错题本闭环：实现“记录错题/斩杀掌握”
-  - 错题记录：`wrong_question` 表按 `(user_id, question_id)` 合并更新权重与最近错题时间
-  - 复习列表：仅展示 `status=0(未掌握)` 的错题，按 `last_wrong_time` 倒序
-  - 掌握斩杀：复习作对后将 `status` 标记为 `1(已掌握)`
-- 数据统计与可视化：后端根据 `question.category` 与用户错题统计聚合计算 5 个维度熟练度，并由前端使用 `ECharts radar` 展示“能力画像”。
+## 🧠 多 Agent 核心逻辑流 (核心功能实现中)
+1.  **深度归因 (Diagnostic)**: 接收用户在 `PracticeView` 中输入的错题与草稿步骤，逆向推演用户的计算卡壳点（例如：估算精度不足导致误选）。
+2.  **策略匹配 (Strategy)**: 结合内置公考知识库，输出针对性的纠错解析。
+3.  **动态变式 (Variant)**: 动态生成同等难度、同类陷阱的衍生题目，巩固薄弱项。
 
-## 3. 技术栈
-- 前端：`Vue 3`、`Vite`、`axios`、`Vue Router`、`Element Plus`、`ECharts`
-- 后端：`Spring Boot 3.5.x`、`MyBatis-Plus 3.5.5`、`MySQL`、`jjwt`（JWT 生成/解析）、`HandlerInterceptor`（鉴权拦截）
-- 运行端口：
-  - 后端：`8080`
-  - 数据库：`MySQL 3306`（`application.yml` 中配置）
+## 🚀 阶段性规划 (Roadmap)
+- [x] Phase 1: 基础题库系统搭建 (用户鉴权、题目分类、错题本基础 CRUD)
+- [x] Phase 2: JWT 安全链路与前后端联调测试
+- [ ] **Phase 3 (Current)**: 接入高阶大模型 API 进行长链推理能力测试。**下一步计划全面接入小米 MiMo-V2.5-Pro API (MiMo Orbit 计划) ，利用其强大的上下文理解能力，重构核心的错题逆向诊断逻辑。**
+- [ ] Phase 4: 部署上线并进行小规模内测。
 
-## 4. 系统架构（简述）
-1. `Vue` 页面发起请求（登录、题目获取、错题记录/列表、统计看板）。
-2. 前端从 `localStorage` 读取 token，axios 请求拦截器写入请求头 `Authorization`。
-3. 后端 `JwtInterceptor` 校验 `/api/**`（放行 `OPTIONS` 和 `/api/auth/login`）。
-4. 业务层通过 `MyBatis-Plus` 的 `BaseMapper` 查询 `question` / `wrong_question`，并进行统计聚合（`GROUP BY`）。
-5. 统计结果返回前端，前端渲染 ECharts 雷达图。
-
-## 5. 关键接口清单
-> 前端实际调用的接口路径（来自代码实现）
-
-- 登录
-  - `POST /api/auth/login`
-  - 请求体示例：`{ "username": "...", "password": "..." }`
-  - 返回示例：`{ "code": 200, "token": "...", "message": "登录成功" }`
-  - 登录接口已在后端鉴权中放行（否则无法登录获取 token）
-
-- 题目
-  - `GET /api/question/random-ten`：随机取 10 道题
-  - `GET /api/question/category?name=xxx`：按 `category` 查询题目
-  - `GET /api/question/list`：返回全部题目（当前作为管理/查看用途保留）
-
-- 错题本
-  - `POST /api/wrong-question/record?userId=1&questionId=...`：记录错题
-  - `GET /api/wrong-question/list?userId=1`：获取“未掌握”错题列表（并批量拉取题目详情）
-  - `POST /api/wrong-question/master?userId=1&questionId=...`：斩杀错题（标记为已掌握）
-
-- 统计看板
-  - `GET /api/stats/summary`
-  - 依赖 `Authorization: Bearer <token>`，后端从 token 中取 `userId`
-  - 返回字段示例：`totalQuestions`、`accuracy`、`avgTime`、`skillValues(5维度)`
-  - 说明：当前实现中 `avgTime` 暂为占位值（默认返回 0，可后续扩展为真实用时统计）
-
-## 6. 数据模型（表含义概述）
-- `question`
-  - `id`、`category`、`title`、`optionsJson`、`answer`、`analysis`
-  - `optionsJson` 在前端会被 `JSON.parse` 解析为选项展示结构
-- `wrong_question`
-  - `id`、`userId`、`questionId`、`wrongCount`、`lastWrongTime`、`status`
-  - `status`：`0=未掌握`、`1=已掌握`
-
-## 7. 本地运行步骤
-### 7.1 准备 MySQL
-1. 创建数据库：`gk_db`
-2. 配置账号密码：当前 `application.yml` 中默认使用
-   - `username: root`
-   - `password: 123456`
-3. 将 `gk_db`、密码等按你的本地环境修改 `gk-backend/gk-backend/src/main/resources/application.yml`
-
-### 7.2 启动后端
-1. 进入后端目录：`gk-backend/gk-backend`
-2. 运行（任选其一）：
-   - `./mvnw spring-boot:run`
-   - 或 `mvn spring-boot:run`
-3. 后端启动后接口基于 `http://localhost:8080`
-
-### 7.3 启动前端
-1. 进入前端目录：`vue-project`
-2. 执行：
-   - `npm install`
-   - `npm run dev`
-3. 前端页面中接口地址直接指向 `http://localhost:8080`（当前未做代理）
-
-### 7.4 登录默认账号（当前代码写死）
-- `admin / 123456`
-
-## 8. 可复制表述
-版本 A（偏“架构+亮点”）：
-- 负责/实现题库训练与错题本系统，使用 `Vue3 + Spring Boot` 构建前后端分离架构；通过 `JWT` + `HandlerInterceptor` 完成 `/api/**` 统一鉴权，并在前端 axios 拦截器中自动携带 token 与处理 401 跳转。
-- 设计随机模考与专项训练接口，支持错题记录/斩杀掌握机制，并基于用户错题与题库分类统计聚合出 5 维熟练度，前端使用 `ECharts radar` 呈现能力画像，形成“训练-复盘-提升”闭环。
-
-版本 B（偏“业务流程闭环”）：
-- 构建“训练-复盘”业务闭环：用户选择训练模式获取题目；作答后将错题写入 `wrong_question`，掌握后将状态更新为已掌握；在首页/统计页基于聚合统计输出准确率与 5 维熟练度雷达图，帮助用户持续定位薄弱模块并迭代训练策略。
-
-## 9. 你可以补充的可量化成果
-- 平均响应耗时：____ ms（可从本地接口日志/监控补充）
-- 数据规模：题库规模（question 数量）____；错题记录量 ____（可在数据库查询后填）
-- 训练体验提升：例如“随机模考稳定性/错题本可用性/页面加载耗时”等 ____（按实际填）
-
+## ⚙️ 本地运行指南
+1. 后端：配置 `application.yml` 中的 MySQL 连接，运行 `GkBackendApplication.java`。
+2. 前端：进入 `vue-project` 目录，执行 `npm install` 与 `npm run dev`。
