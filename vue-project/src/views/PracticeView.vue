@@ -149,6 +149,33 @@ import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import { useRoute } from 'vue-router'
 
+// --- AI Agent 诊断模块 (开发中) ---
+const isAgentThinking = ref(false);
+const diagnosticResult = ref(null);
+
+/**
+ * 触发智能诊断 Agent 工作流
+ * @param {Number} qId 错题 ID
+ * @param {String} userSteps 用户输入的草稿计算步骤
+ */
+const handleAIDiagnose = async (qId, userSteps) => {
+  isAgentThinking.value = true;
+  try {
+    // 调用后端 Agent 推演接口
+    // const res = await axios.post(`/api/wrong-question/diagnose/${qId}`, { draftSteps: userSteps });
+    
+    // 模拟等待长链推理的延迟
+    console.log('[Frontend] Waiting for Diagnostic Agent response...');
+    
+    // TODO: 接收到 JSON payload 后，使用富文本渲染错题归因和变式题
+    // diagnosticResult.value = res.data;
+  } catch (error) {
+    console.error('Agent workflow failed:', error);
+  } finally {
+    isAgentThinking.value = false;
+  }
+};
+
 const route = useRoute();
 
 // 2. 状态声明区（先声明，后使用，保证逻辑严密）

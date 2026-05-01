@@ -6,10 +6,12 @@ import com.zwy.gk_backend.entity.WrongQuestion;
 import com.zwy.gk_backend.mapper.QuestionMapper;
 import com.zwy.gk_backend.mapper.WrongQuestionMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -75,5 +77,28 @@ public class WrongQuestionController {
             exist.setStatus(1); // 标记为已斩杀
             wrongQuestionMapper.updateById(exist);
         }
+    }
+
+    /**
+     * @author 赵文阳
+     * TODO: 阶段 3 核心功能 - 触发多 Agent 错题推演诊断
+     * 接收用户的错题ID和草稿步骤，调用大模型 API 进行 Chain of Thought (CoT) 分析
+     */
+    @PostMapping("/diagnose/{questionId}")
+    public ResponseEntity<String> diagnoseWrongQuestion(@PathVariable Integer questionId, @RequestBody Map<String, String> draftData) {
+        // 1. 获取题目详情 (QuestionMapper)
+        // Question question = questionMapper.selectById(questionId);
+        
+        // 2. 组装 Prompt Payload
+        String userDraft = draftData.get("draftSteps");
+        
+        // --- Agent 工作流 (Stub 存根，待接入 MiMo API) ---
+        // DiagnosticAgent agent = new DiagnosticAgent(mimoApiClient);
+        // AgentResponse response = agent.analyzeCoT(question.getContent(), userDraft);
+        
+        // 3. 记录分析日志至 task_log 表
+        // taskLogMapper.insertLog("DIAGNOSE", questionId, response.getTraceId());
+        
+        return ResponseEntity.ok("Agent diagnostic workflow initiated. Pending API integration.");
     }
 }
