@@ -1,444 +1,408 @@
 <template>
-  <div class="dashboard">
-    <div class="dashboard-inner">
+  <div class="chat-layout">
+    <!-- 左侧边栏 -->
+    <aside class="sidebar">
+      <button class="new-chat-btn" @click="handleNewChat">
+        <span class="plus-icon">+</span> 发起新对话
+      </button>
+      <div class="history-title">历史对话</div>
+      <div class="history-list">
+        <div
+          v-for="item in chatHistory"
+          :key="item.id"
+          class="history-item"
+          :class="{ active: item.id === activeChatId }"
+          @click="switchChat(item.id)"
+        >
+          {{ item.title }}
+        </div>
+      </div>
+    </aside>
 
-      <!-- Loading -->
-      <div v-if="loading" class="loading-state">
-        <div class="spinner"></div>
-        <p>正在加载数据看板...</p>
+    <!-- 右侧主区域 -->
+    <main class="main-area">
+      <div ref="chatContainerRef" class="chat-messages">
+        <div v-if="chatMessages.length === 0" class="chat-empty">
+          <h2>有什么备考问题，尽管问我</h2>
+          <p>十年国考专家在线答疑，支持行测、申论</p>
+        </div>
+        <div
+          v-for="(msg, idx) in chatMessages"
+          :key="idx"
+          class="chat-msg"
+          :class="msg.role"
+        >
+          <div v-if="msg.role === 'user'" class="msg-bubble user-bubble">
+            {{ msg.content }}
+          </div>
+          <div
+            v-else
+            class="msg-bubble ai-bubble markdown-body"
+            v-html="renderMarkdown(msg.content)"
+          ></div>
+        </div>
+        <div v-if="isChatLoading" class="chat-thinking">
+          <span class="dot-pulse"></span> 正在思考...
+        </div>
       </div>
 
-      <!-- Error -->
-      <div v-else-if="error" class="error-state">
-        <p>数据加载失败，请确认后端已启动</p>
-        <button class="btn-retry" @click="fetchSummary">重试</button>
+      <div class="input-area">
+        <div class="input-bar">
+          <input
+            v-model="chatInput"
+            class="chat-input"
+            placeholder="输入你的备考问题..."
+            @keyup.enter="handleChatSend"
+            :disabled="isChatLoading"
+          />
+          <button
+            class="chat-send-btn"
+            @click="handleChatSend"
+            :disabled="isChatLoading || !chatInput.trim()"
+          >
+            发送
+          </button>
+        </div>
       </div>
-
-      <!-- Dashboard Content -->
-      <template v-else>
-        <header class="hero">
-          <h1 class="hero-title">欢迎回来</h1>
-          <p class="hero-subtitle">遇见不一样的自己</p>
-        </header>
-
-        <!-- Stats Row -->
-        <div class="stats-row">
-          <div class="stat-card">
-            <div class="stat-label">总题量</div>
-            <div class="stat-value">{{ summary.totalQuestions }}</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">正确率</div>
-            <div class="stat-value" :class="accuracyClass">
-              {{ summary.accuracy }}<span class="unit">%</span>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">平均用时</div>
-            <div class="stat-value">{{ avgTimeDisplay }}<span class="unit">/题</span></div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">综合熟练度</div>
-            <div class="stat-value" :class="masteryClass">
-              {{ overallMastery }}<span class="unit">%</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Bento Grid -->
-        <div class="bento-grid">
-          <div class="bento-card chart-card">
-            <h3 class="card-heading">能力画像</h3>
-            <p class="card-desc">各模块熟练度雷达图</p>
-            <div ref="chartRef" class="chart-container"></div>
-          </div>
-
-          <div class="bento-card actions-card">
-            <h3 class="card-heading">快速操作</h3>
-            <p class="card-desc">继续你的学习计划</p>
-            <div class="action-list">
-              <button class="action-btn primary" @click="$router.push('/practice')">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                开始随机模考
-              </button>
-              <button class="action-btn secondary" @click="$router.push('/practice?mode=mistake')">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
-                清理错题本
-              </button>
-              <button class="action-btn tertiary" @click="$router.push('/bank')">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
-                选岗与备考策略
-              </button>
-            </div>
-          </div>
-        </div>
-      </template>
-
-    </div>
+    </main>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import axios from 'axios'
-import * as echarts from 'echarts'
+import MarkdownIt from 'markdown-it'
+import 'github-markdown-css/github-markdown-light.css'
 
-const chartRef = ref(null)
-let chartInstance = null
+const md = new MarkdownIt()
+const BASE = 'http://localhost:8080/api/chat'
+const USER_ID = 1
 
-const loading = ref(true)
-const error = ref(false)
-const summary = ref({
-  totalQuestions: 0,
-  accuracy: 0,
-  avgTime: 0,
-  skillValues: [100, 100, 100, 100, 100]
-})
+const chatMessages = ref([])
+const chatInput = ref('')
+const isChatLoading = ref(false)
+const chatContainerRef = ref(null)
+let abortController = null
 
-const overallMastery = computed(() => {
-  const vals = summary.value.skillValues
-  if (!vals || vals.length === 0) return 0
-  return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length)
-})
+const chatHistory = ref([])
+const activeChatId = ref(null)
 
-const accuracyClass = computed(() => {
-  const v = summary.value.accuracy
-  if (v >= 80) return 'text-success'
-  if (v >= 50) return 'text-warning'
-  return 'text-danger'
-})
-
-const masteryClass = computed(() => {
-  const v = overallMastery.value
-  if (v >= 80) return 'text-success'
-  if (v >= 50) return 'text-warning'
-  return 'text-danger'
-})
-
-const avgTimeDisplay = computed(() => {
-  return summary.value.avgTime > 0 ? summary.value.avgTime : '--'
-})
-
-const radarIndicators = [
-  { name: '言语理解', max: 100 },
-  { name: '数量关系', max: 100 },
-  { name: '判断推理', max: 100 },
-  { name: '资料分析', max: 100 },
-  { name: '常识判断', max: 100 }
-]
-
-const CHART_COLOR = '#111111'
-
-const initChart = () => {
-  if (!chartRef.value) return
-  if (chartInstance) chartInstance.dispose()
-
-  chartInstance = echarts.init(chartRef.value)
-  const option = {
-    radar: {
-      indicator: radarIndicators,
-      center: ['50%', '50%'],
-      radius: '70%',
-      splitNumber: 4,
-      axisName: {
-        color: '#666',
-        fontSize: 12,
-        fontWeight: 500
-      },
-      splitArea: {
-        areaStyle: {
-          color: ['rgba(0,0,0,0.02)', 'rgba(0,0,0,0.04)']
-        }
-      },
-      axisLine: {
-        lineStyle: { color: 'rgba(0,0,0,0.08)' }
-      },
-      splitLine: {
-        lineStyle: { color: 'rgba(0,0,0,0.08)' }
-      }
-    },
-    series: [{
-      type: 'radar',
-      data: [{
-        value: summary.value.skillValues,
-        name: '熟练度',
-        areaStyle: {
-          color: 'rgba(0,0,0,0.08)'
-        },
-        lineStyle: {
-          color: CHART_COLOR,
-          width: 2
-        },
-        itemStyle: {
-          color: CHART_COLOR
-        }
-      }],
-      symbol: 'circle',
-      symbolSize: 6
-    }]
-  }
-
-  chartInstance.setOption(option)
-  chartInstance.resize()
+const scrollChatToBottom = () => {
+  nextTick(() => {
+    if (chatContainerRef.value) {
+      chatContainerRef.value.scrollTop = chatContainerRef.value.scrollHeight
+    }
+  })
 }
 
-const handleResize = () => {
-  chartInstance?.resize()
-}
-
-const fetchSummary = async () => {
-  loading.value = true
-  error.value = false
+const fetchSessions = async () => {
   try {
-    const res = await axios.get('http://localhost:8080/api/stats/summary')
-    summary.value = res.data
-  } catch {
-    error.value = true
-    summary.value = { totalQuestions: 0, accuracy: 0, avgTime: 0, skillValues: [100, 100, 100, 100, 100] }
+    const res = await axios.get(`${BASE}/sessions`, { params: { userId: USER_ID } })
+    chatHistory.value = res.data
+  } catch { chatHistory.value = [] }
+}
+
+const handleNewChat = () => {
+  chatMessages.value = []
+  chatInput.value = ''
+  activeChatId.value = null
+  abortController?.abort()
+  isChatLoading.value = false
+}
+
+const switchChat = async (id) => {
+  activeChatId.value = id
+  abortController?.abort()
+  isChatLoading.value = false
+  try {
+    const res = await axios.get(`${BASE}/messages`, { params: { sessionId: id } })
+    chatMessages.value = res.data.map(m => ({ role: m.role, content: m.content }))
+    scrollChatToBottom()
+  } catch { chatMessages.value = [] }
+}
+
+const handleChatSend = async () => {
+  const prompt = chatInput.value.trim()
+  if (!prompt || isChatLoading.value) return
+
+  chatMessages.value.push({ role: 'user', content: prompt })
+  chatInput.value = ''
+  isChatLoading.value = true
+
+  chatMessages.value.push({ role: 'assistant', content: '' })
+  const aiMsg = chatMessages.value[chatMessages.value.length - 1]
+  scrollChatToBottom()
+
+  try {
+    abortController = new AbortController()
+    const params = new URLSearchParams({ userPrompt: prompt })
+    if (activeChatId.value) params.set('sessionId', activeChatId.value)
+
+    const response = await fetch(`${BASE}/stream?${params}`, { signal: abortController.signal })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      const chunk = decoder.decode(value, { stream: true })
+      if (chunk) aiMsg.content += chunk
+      scrollChatToBottom()
+    }
+
+    // 流结束后保存 AI 回复到数据库
+    if (aiMsg.content) {
+      // 如果是新对话，后端已自动创建 session，需要从响应头或重新获取
+      if (!activeChatId.value) {
+        await fetchSessions()
+        if (chatHistory.value.length > 0) {
+          activeChatId.value = chatHistory.value[0].id
+        }
+      }
+      if (activeChatId.value) {
+        await axios.post(`${BASE}/save`, { content: aiMsg.content }, {
+          params: { sessionId: activeChatId.value }
+        })
+      }
+    }
+  } catch (error) {
+    if (error.name !== 'AbortError') {
+      aiMsg.content = '抱歉，网络连接出现问题，请稍后再试。'
+    }
   } finally {
-    loading.value = false
+    isChatLoading.value = false
+    abortController = null
   }
 }
 
-onMounted(async () => {
-  await fetchSummary()
-  await nextTick()
-  initChart()
-  window.addEventListener('resize', handleResize)
-})
+const renderMarkdown = (text) => md.render(text || '')
 
-onUnmounted(() => {
-  window.removeEventListener('resize', handleResize)
-  chartInstance?.dispose()
-})
-
-watch(() => summary.value.skillValues, () => {
-  nextTick(() => initChart())
-})
+onMounted(() => { fetchSessions() })
+onUnmounted(() => { abortController?.abort() })
 </script>
 
 <style scoped>
-/* ===== Layout ===== */
-.dashboard {
-  min-height: 100vh;
-  background-color: #ffffff;
+/* ===== 整体布局 ===== */
+.chat-layout {
   display: flex;
-  justify-content: center;
+  height: calc(100vh - 56px);
+  background: #fff;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  color: #1a1a1a;
 }
 
-.dashboard-inner {
-  width: 100%;
-  max-width: 960px;
-  padding: 10vh 24px 60px;
-}
-
-/* ===== Loading / Error ===== */
-.loading-state, .error-state {
+/* ===== 左侧边栏 ===== */
+.sidebar {
+  width: 260px;
+  background: #f9f9f9;
+  border-right: 1px solid #eee;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
+  padding: 16px 12px;
+}
+
+.new-chat-btn {
+  display: flex;
   align-items: center;
   justify-content: center;
-  padding: 120px 0;
-  color: #888;
-  gap: 16px;
-}
-
-.spinner {
-  width: 32px; height: 32px;
-  border: 3px solid #f3f3f3; border-top: 3px solid #111;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-.btn-retry {
-  padding: 10px 28px;
-  border-radius: 999px;
-  border: 1px solid #ddd;
-  background: #fff;
-  color: #333;
+  gap: 6px;
+  width: 100%;
+  padding: 12px 0;
+  background: #111;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
-}
-.btn-retry:hover { background: #f5f5f5; }
-
-/* ===== Hero ===== */
-.hero {
-  text-align: center;
-  margin-bottom: 48px;
-  animation: fadeIn 0.6s ease-out;
+  transition: background 0.2s;
 }
 
-.hero-title {
-  font-size: 2.25rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: #111;
-  margin-bottom: 8px;
-  line-height: 1.2;
-}
+.new-chat-btn:hover { background: #333; }
 
-.hero-subtitle {
-  font-size: 1.05rem;
-  color: #888;
-  font-weight: 400;
-}
-
-/* ===== Stats Row ===== */
-.stats-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 32px;
-  animation: fadeIn 0.6s ease-out 0.1s both;
-}
-
-.stat-card {
-  background: #fafafa;
-  border: 1px solid #f0f0f0;
-  border-radius: 16px;
-  padding: 24px 20px;
-  text-align: center;
-  transition: all 0.25s ease;
-}
-
-.stat-card:hover {
-  border-color: #e0e0e0;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.03);
-}
-
-.stat-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: #999;
-  margin-bottom: 10px;
-  letter-spacing: 0.02em;
-}
-
-.stat-value {
-  font-size: 2rem;
-  font-weight: 700;
-  color: #111;
-  letter-spacing: -0.02em;
+.plus-icon {
+  font-size: 18px;
+  font-weight: 300;
   line-height: 1;
 }
 
-.stat-value .unit {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: #bbb;
-}
-
-.text-success { color: #10b981; }
-.text-warning { color: #f59e0b; }
-.text-danger  { color: #ef4444; }
-
-/* ===== Bento Grid ===== */
-.bento-grid {
-  display: grid;
-  grid-template-columns: 1.6fr 1fr;
-  gap: 20px;
-  animation: fadeIn 0.6s ease-out 0.2s both;
-}
-
-.bento-card {
-  background: #ffffff;
-  border: 1px solid #eaeaea;
-  border-radius: 20px;
-  padding: 28px;
-  transition: all 0.25s ease;
-}
-
-.bento-card:hover {
-  border-color: #dcdcdc;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.03);
-}
-
-.card-heading {
-  font-size: 1.15rem;
+.history-title {
+  font-size: 12px;
   font-weight: 600;
-  color: #111;
-  margin-bottom: 4px;
-  letter-spacing: -0.01em;
+  color: #999;
+  margin: 20px 0 8px 4px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
-.card-desc {
-  font-size: 0.9rem;
-  color: #aaa;
-  margin-bottom: 20px;
+.history-list {
+  flex: 1;
+  overflow-y: auto;
 }
 
-/* ===== Radar Chart ===== */
-.chart-container {
-  width: 100%;
-  height: 300px;
+.history-item {
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #444;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* ===== Quick Actions ===== */
-.action-list {
+.history-item:hover { background: #eee; }
+.history-item.active { background: #e8e8e8; font-weight: 500; color: #111; }
+
+/* ===== 右侧主区域 ===== */
+.main-area {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  min-width: 0;
 }
 
-.action-btn {
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px 0;
+  scroll-behavior: smooth;
+}
+
+.chat-empty {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 16px 20px;
-  border-radius: 14px;
-  border: 1px solid #eaeaea;
-  background: #fff;
+  justify-content: center;
+  height: 100%;
+  color: #bbb;
+  text-align: center;
+}
+
+.chat-empty h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 8px;
+}
+
+.chat-empty p {
+  font-size: 14px;
+  color: #aaa;
+}
+
+.chat-msg {
+  margin-bottom: 20px;
+  display: flex;
+  padding: 0 24px;
+}
+
+.chat-msg.user { justify-content: flex-end; }
+.chat-msg.assistant { justify-content: flex-start; }
+
+.msg-bubble {
+  max-width: 70%;
+  padding: 14px 20px;
+  border-radius: 18px;
   font-size: 15px;
-  font-weight: 500;
-  color: #333;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-align: left;
+  line-height: 1.6;
+  word-break: break-word;
 }
 
-.action-btn:hover {
-  transform: translateY(-1px);
-}
-
-.action-btn.primary {
+.user-bubble {
   background: #111;
   color: #fff;
-  border-color: #111;
-}
-.action-btn.primary:hover { background: #2a2a2a; }
-
-.action-btn.secondary {
-  background: #fef8f8;
-  color: #dc2626;
-  border-color: #fee2e2;
-}
-.action-btn.secondary:hover { background: #fef0f0; }
-
-.action-btn.tertiary {
-  background: #fafafa;
-}
-.action-btn.tertiary:hover { background: #f0f0f0; }
-
-/* ===== Animation ===== */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0); }
+  border-bottom-right-radius: 4px;
 }
 
-/* ===== Responsive ===== */
+.ai-bubble {
+  background: #f5f5f5;
+  color: #222;
+  border-bottom-left-radius: 4px;
+}
+
+.ai-bubble :deep(table) { border-collapse: collapse; margin: 12px 0; width: 100%; }
+.ai-bubble :deep(th),
+.ai-bubble :deep(td) { border: 1px solid #ddd; padding: 8px 12px; text-align: left; font-size: 14px; }
+.ai-bubble :deep(th) { background: #f0f0f0; font-weight: 600; }
+.ai-bubble :deep(pre) { background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 10px; overflow-x: auto; font-size: 13px; margin: 12px 0; }
+.ai-bubble :deep(code) { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; }
+.ai-bubble :deep(p code) { background: #e8e8e8; padding: 2px 6px; border-radius: 4px; color: #d63384; }
+.ai-bubble :deep(ul),
+.ai-bubble :deep(ol) { padding-left: 20px; margin: 8px 0; }
+.ai-bubble :deep(blockquote) { border-left: 3px solid #ddd; padding-left: 16px; color: #666; margin: 12px 0; }
+
+.chat-thinking {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #999;
+  font-size: 14px;
+  padding: 0 24px;
+}
+
+.dot-pulse {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #999;
+  animation: dotPulse 1.4s infinite ease-in-out;
+}
+
+@keyframes dotPulse {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1); }
+}
+
+/* ===== 底部输入区 ===== */
+.input-area {
+  padding: 16px 24px 24px;
+  flex-shrink: 0;
+}
+
+.input-bar {
+  display: flex;
+  gap: 12px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.chat-input {
+  flex: 1;
+  padding: 14px 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 14px;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.2s;
+  font-family: inherit;
+}
+
+.chat-input:focus { border-color: #111; }
+.chat-input:disabled { background: #f9f9f9; cursor: not-allowed; }
+
+.chat-send-btn {
+  padding: 14px 28px;
+  background: #111;
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.chat-send-btn:hover:not(:disabled) { background: #333; }
+.chat-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
 @media (max-width: 768px) {
-  .dashboard-inner { padding: 6vh 16px 40px; }
-  .hero-title { font-size: 1.75rem; }
-  .stats-row { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-  .bento-grid { grid-template-columns: 1fr; }
-  .stat-value { font-size: 1.6rem; }
+  .sidebar { display: none; }
+  .chat-msg { padding: 0 16px; }
+  .msg-bubble { max-width: 90%; }
+  .input-area { padding: 12px 16px 20px; }
 }
 </style>

@@ -12,6 +12,8 @@
     "axios": "^1.15.1",
     "echarts": "^6.0.0",
     "element-plus": "^2.13.7",
+    "github-markdown-css": "^5.9.0",
+    "markdown-it": "^14.1.1",
     "vue": "^3.5.32",
     "vue-router": "^4.6.4"
   },

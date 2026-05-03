@@ -12,3 +12,9 @@ spring:
 # 设置后端运行的端口
 server:
   port: 8080
+
+# 大模型 API 配置（兼容 OpenAI 格式，支持 DeepSeek / MiMo / 硅基流动等）
+ai:
+  api-key: sk-cga07vbgj9j3zibs2qfea4uxr705coqbznddjk02cwxzlir1
+  base-url: https://api.xiaomimimo.com/v1
+  model: mimo-v2.5-pro
