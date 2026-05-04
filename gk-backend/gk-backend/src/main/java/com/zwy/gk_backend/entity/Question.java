@@ -16,6 +16,7 @@ public class Question {
     private String optionsJson;
     private String answer;
     private String analysis;
+    private String module;
 
     // 下面是 Java 必须的 Get 和 Set 方法（方便存取数据）
     public Integer getId() { return id; }
@@ -35,4 +36,7 @@ public class Question {
 
     public String getAnalysis() { return analysis; }
     public void setAnalysis(String analysis) { this.analysis = analysis; }
+
+    public String getModule() { return module; }
+    public void setModule(String module) { this.module = module; }
 }
