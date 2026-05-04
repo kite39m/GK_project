@@ -2,7 +2,9 @@ package com.zwy.gk_backend.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.zwy.gk_backend.ai.tutor.ExamAiTutor;
+import com.zwy.gk_backend.dto.GenerateResultDTO;
 import com.zwy.gk_backend.dto.ModuleStatDTO;
+import com.zwy.gk_backend.dto.TrapFeedback;
 import com.zwy.gk_backend.entity.Question;
 import com.zwy.gk_backend.entity.UserAnswerRecord;
 import com.zwy.gk_backend.entity.UserKnowledgeProfile;
@@ -49,11 +51,23 @@ public class XingceController {
     }
 
     @PostMapping("/answer")
-    public ResponseEntity<Map<String, String>> submitAnswer(@RequestBody UserAnswerRecord record) {
+    public ResponseEntity<Map<String, Object>> submitAnswer(@RequestBody UserAnswerRecord record) {
         xingceService.saveAnswer(record);
-        Map<String, String> resp = new HashMap<>();
+        TrapFeedback trapFeedback = xingceService.checkTrapFeedback(record);
+
+        Map<String, Object> resp = new HashMap<>();
         resp.put("status", "ok");
+        resp.put("trapFeedback", trapFeedback);
         return ResponseEntity.ok(resp);
+    }
+
+    @PostMapping("/generate")
+    public ResponseEntity<GenerateResultDTO> generateQuestions(@RequestBody Map<String, Object> body) {
+        Integer userId = (Integer) body.get("userId");
+        String module = (String) body.get("module");
+        int count = body.containsKey("count") ? (Integer) body.get("count") : 5;
+        GenerateResultDTO result = xingceService.generateQuestions(userId, module, count);
+        return ResponseEntity.ok(result);
     }
 
     @PostMapping("/diagnose")
