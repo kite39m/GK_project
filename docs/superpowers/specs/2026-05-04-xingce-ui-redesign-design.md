@@ -56,6 +56,57 @@
 --font-mono: ui-monospace, "SF Mono", "Cascadia Code", monospace;
 ```
 
+### 1.6 焦点态（Focus State）
+
+键盘导航时的焦点轮廓，确保刷题时可用 Tab/快捷键操作：
+
+```css
+:focus-visible {
+  outline: 2px solid #1D2129;
+  outline-offset: 2px;
+}
+```
+
+适用于选项按钮、底部按钮、返回按钮等所有可交互元素。
+
+### 1.7 滚动条美化
+
+全局接管原生滚动条，保持极简黑白风统一：
+
+```css
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+```
+
+### 1.8 深色模式预留
+
+为未来深色模式留出架构口子，当前不实现，仅预定义变量映射：
+
+```css
+[data-theme="dark"] {
+  --color-text-title: #E5E6EB;
+  --color-text-body: #A3A6AB;
+  --color-text-caption: #6B7280;
+  --color-text-disabled: #4B5563;
+  --color-bg-page: #121212;
+  --color-bg-card: #1E1E1E;
+  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.2);
+  --shadow-card-hover: 0 8px 30px rgba(0, 0, 0, 0.3);
+}
+```
+
 ---
 
 ## 2. 模块选择页（XingceView）
@@ -81,7 +132,7 @@
 │  政治、经济、法律、科技、历史 │  ← 13px / 400 / #86909C
 │                             │  ← 双行截断
 │  ─────────────────────────  │  ← 细分割线 #f0f0f0
-│  128 道题 · 正确率 72%      │  ← 12px / 400 / #C9CDD4
+│  128 道题 · 正确率 72%      │  ← 12px / 400 / rgba(134,144,156,0.7)
 └─────────────────────────────┘
 ```
 
@@ -133,13 +184,14 @@
 ### 3.2 题目卡片
 
 - 无边框，弥散阴影，16px 圆角
-- 内边距 32px 28px
+- 内边距 32px 28px（长文本题型：Y 轴缩减为 24px，把纵向空间让给内容）
 - 题号 badge：`Q1`，浅灰底，`72rem/700`
 - 难度星级 + 来源标签（保留现有逻辑）
 - **题干文字**：`18px / 400 / line-height 1.7 / #1D2129`
   - 字重 400（长文本友好，减少视觉疲劳）
   - 关键词/数据可加粗 600
   - 资料分析模块的大段材料必须 400
+- **沉浸阅读**：资料分析/言语理解等长题干题型，卡片 Y 轴内边距从 32px 收敛至 24px，最大化文本可见区域
 
 ### 3.3 选项
 
