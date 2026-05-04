@@ -1,11 +1,10 @@
 package com.zwy.gk_backend.ai.tutor;
 
-import com.zwy.gk_backend.ai.tools.ExamDataTools;
 import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
 import dev.langchain4j.service.spring.AiService;
 
-@AiService(tools = ExamDataTools.class)
+@AiService(tools = "examDataTools")
 public interface ExamAiTutor {
 
     @SystemMessage("""
