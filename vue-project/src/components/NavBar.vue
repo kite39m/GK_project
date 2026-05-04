@@ -10,6 +10,12 @@
         <router-link to="/" class="nav-item">
           <span>首页</span>
         </router-link>
+        <router-link to="/xingce" class="nav-item">
+          <span>行测</span>
+        </router-link>
+        <router-link to="/shenlun" class="nav-item">
+          <span>申论</span>
+        </router-link>
          <router-link to="/practice" class="nav-item">
           <span>速算</span>
         </router-link>
@@ -24,8 +30,6 @@
       </div>
     </div>
   </header>
-  
-  <div class="nav-spacer"></div>
 </template>
 
 <style scoped>
@@ -141,9 +145,4 @@
   transform: scale(1.05);
 }
 
-/* 占位符，因为 nav 是 fixed 脱离文档流的，需要这个撑开高度 */
-.nav-spacer {
-  height: 64px;
-  width: 100%;
-}
 </style>

@@ -3,6 +3,10 @@ import HomeView from '../views/HomeView.vue'
 import BankView from '../views/BankView.vue'
 import PracticeView from '../views/PracticeView.vue'
 import LoginView from '../views/LoginView.vue'
+import XingceView from '../views/XingceView.vue'
+import XingceModuleView from '../views/XingceModuleView.vue'
+import ShenlunView from '../views/ShenlunView.vue'
+import ShenlunWriteView from '../views/ShenlunWriteView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -28,6 +32,26 @@ const router = createRouter({
       path: '/practice',
       name: 'practice',
       component: PracticeView
+    },
+    {
+      path: '/xingce',
+      name: 'xingce',
+      component: XingceView
+    },
+    {
+      path: '/xingce/:module',
+      name: 'xingce-module',
+      component: XingceModuleView
+    },
+    {
+      path: '/shenlun',
+      name: 'shenlun',
+      component: ShenlunView
+    },
+    {
+      path: '/shenlun/write',
+      name: 'shenlun-write',
+      component: ShenlunWriteView
     }
   ]
 })
