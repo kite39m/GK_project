@@ -17,6 +17,12 @@ public class WebConfig implements WebMvcConfigurer {
                 // 拦截所有 /api/** 的请求
                 .addPathPatterns("/api/**")
                 // 但是要放行登录接口，否则连登录都登不进去了！
-                .excludePathPatterns("/api/auth/login", "/api/chat/stream");
+                .excludePathPatterns(
+                        "/api/auth/login",
+                        "/api/chat/stream",
+                        "/api/xingce/diagnose",
+                        "/api/shenlun/essay/submit",
+                        "/api/shenlun/material/recommend"
+                );
     }
 }
