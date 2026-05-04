@@ -8,6 +8,16 @@
 
     <div v-if="loading" class="loading">加载中...</div>
 
+    <!-- 完成状态 -->
+    <div v-else-if="quizFinished" class="finish-area">
+      <div class="finish-icon">✓</div>
+      <h3>本轮练习完成</h3>
+      <p class="finish-stats">共 {{ questions.length }} 题，答对 {{ correctCount }} 题，正确率 {{ accuracy }}%</p>
+      <button class="generate-btn" @click="restartQuiz" :disabled="generating">
+        {{ generating ? 'AI 出题中...' : '再来一组' }}
+      </button>
+    </div>
+
     <div v-else-if="currentQuestion" class="question-area">
       <div class="question-title">
         <span>{{ currentQuestion.title }}</span>
@@ -94,6 +104,13 @@ const showResult = ref(false)
 const isCorrect = ref(false)
 const trapFeedback = ref(null)
 const generateError = ref('')
+const quizFinished = ref(false)
+
+const correctCount = computed(() => questions.value.filter(q => q._isCorrect).length)
+const accuracy = computed(() => {
+  if (questions.value.length === 0) return 0
+  return Math.round((correctCount.value / questions.value.length) * 100)
+})
 const elapsed = ref(0)
 let timer = null
 
@@ -126,6 +143,7 @@ const submitAnswer = async () => {
   if (!selectedAnswer.value) return
   showResult.value = true
   isCorrect.value = selectedAnswer.value === currentQuestion.value.answer
+  currentQuestion.value._isCorrect = isCorrect.value
   trapFeedback.value = null
 
   try {
@@ -151,7 +169,20 @@ const nextQuestion = () => {
     showResult.value = false
     trapFeedback.value = null
     elapsed.value = 0
+  } else {
+    quizFinished.value = true
   }
+}
+
+const restartQuiz = async () => {
+  quizFinished.value = false
+  questions.value = []
+  currentIndex.value = 0
+  selectedAnswer.value = null
+  showResult.value = false
+  trapFeedback.value = null
+  elapsed.value = 0
+  await generateQuestions()
 }
 
 const generateQuestions = async () => {
@@ -307,6 +338,32 @@ onUnmounted(() => { clearInterval(timer) })
 }
 .generate-btn:disabled { background: #ccc; cursor: not-allowed; }
 .error-msg { color: #ff4d4f; font-size: 0.9rem; margin-bottom: 12px; }
+.finish-area {
+  text-align: center;
+  padding: 80px 24px;
+}
+.finish-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #f6ffed;
+  color: #52c41a;
+  font-size: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+}
+.finish-area h3 {
+  font-size: 1.4rem;
+  margin: 0 0 8px;
+  color: #222;
+}
+.finish-stats {
+  color: #888;
+  font-size: 0.95rem;
+  margin: 0 0 28px;
+}
 .question-meta {
   display: flex;
   align-items: center;
