@@ -8,6 +8,7 @@ import com.zwy.gk_backend.entity.AiQuestion;
 import com.zwy.gk_backend.entity.Question;
 import com.zwy.gk_backend.entity.UserAnswerRecord;
 import com.zwy.gk_backend.entity.UserKnowledgeProfile;
+import com.zwy.gk_backend.event.DifficultyUpdateEvent;
 import com.zwy.gk_backend.event.QuestionGenerateEvent;
 import com.zwy.gk_backend.mapper.AiQuestionMapper;
 import com.zwy.gk_backend.mapper.QuestionMapper;
@@ -54,6 +55,9 @@ public class XingceServiceImpl implements XingceService {
     @Override
     public void saveAnswer(UserAnswerRecord record) {
         answerRecordMapper.insert(record);
+
+        // 发布难度更新事件
+        eventPublisher.publishEvent(new DifficultyUpdateEvent(this, record.getQuestionId(), Boolean.TRUE.equals(record.getIsCorrect()), "question"));
 
         if (record.getConcept() != null && !record.getConcept().isEmpty()) {
             profileService.updateAfterAnswer(
