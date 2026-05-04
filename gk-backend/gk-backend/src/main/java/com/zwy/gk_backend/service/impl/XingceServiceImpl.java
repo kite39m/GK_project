@@ -20,6 +20,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class XingceServiceImpl implements XingceService {
@@ -103,9 +104,40 @@ public class XingceServiceImpl implements XingceService {
         List<Question> merged = new ArrayList<>();
         boolean fromCache = true;
 
-        // 1. 从 ai_question_pool 检索 ACTIVE 题目
+        // 1. 查询用户已答对的题目ID（排除用）
+        QueryWrapper<UserAnswerRecord> answeredQuery = new QueryWrapper<>();
+        answeredQuery.eq("user_id", userId)
+                     .eq("module", module)
+                     .eq("is_correct", true)
+                     .select("question_id");
+        List<Object> answeredIds = answerRecordMapper.selectObjs(answeredQuery);
+        Set<Integer> correctIds = new HashSet<>();
+        for (Object id : answeredIds) {
+            correctIds.add(((Number) id).intValue());
+        }
+
+        // 2. 查询用户答错的题目ID（错题优先用）
+        QueryWrapper<UserAnswerRecord> wrongQuery = new QueryWrapper<>();
+        wrongQuery.eq("user_id", userId)
+                  .eq("module", module)
+                  .eq("is_correct", false)
+                  .select("question_id");
+        List<Object> wrongIds = answerRecordMapper.selectObjs(wrongQuery);
+        Set<Integer> wrongIdSet = new HashSet<>();
+        for (Object id : wrongIds) {
+            wrongIdSet.add(((Number) id).intValue());
+        }
+
+        // 3. 从 ai_question_pool 检索（排除已答对 + 随机）
         QueryWrapper<AiQuestion> aiQuery = new QueryWrapper<>();
-        aiQuery.eq("module", module).eq("status", "ACTIVE").last("LIMIT " + count);
+        aiQuery.eq("module", module).eq("status", "ACTIVE");
+        if (!correctIds.isEmpty()) {
+            aiQuery.notIn("id", correctIds);
+        }
+        aiQuery.orderByAsc(
+            "CASE WHEN id IN (" + (wrongIdSet.isEmpty() ? "0" : wrongIdSet.stream().map(String::valueOf).collect(Collectors.joining(","))) + ") THEN 0 ELSE 1 END"
+        );
+        aiQuery.last("ORDER BY RAND() LIMIT " + count);
         List<AiQuestion> aiQuestions = aiQuestionMapper.selectList(aiQuery);
 
         for (AiQuestion aiq : aiQuestions) {
@@ -117,23 +149,47 @@ public class XingceServiceImpl implements XingceService {
             q.setOptionsJson(aiq.getOptionsJson());
             q.setAnswer(aiq.getAnswer());
             q.setAnalysis(aiq.getAnalysis());
+            q.setDifficulty(aiq.getDifficulty());
+            q.setSource("AI_GEN");
             merged.add(q);
         }
 
-        // 2. 不足则从 question 正式题库补充
+        // 4. 不足则从 question 正式题库补充（排除已答对 + 随机）
         if (merged.size() < count) {
             int remain = count - merged.size();
+            Set<Integer> existingIds = merged.stream().map(Question::getId).collect(Collectors.toSet());
+            existingIds.addAll(correctIds);
+
             QueryWrapper<Question> formalQuery = new QueryWrapper<>();
-            formalQuery.eq("module", module).last("LIMIT " + remain);
+            formalQuery.eq("module", module);
+            if (!existingIds.isEmpty()) {
+                formalQuery.notIn("id", existingIds);
+            }
+            formalQuery.last("ORDER BY RAND() LIMIT " + remain);
             List<Question> formal = questionMapper.selectList(formalQuery);
             merged.addAll(formal);
+        }
+
+        // 5. 仍然不足 → 错题重练（允许已答对的错题重新出现）
+        if (merged.size() < count && !wrongIdSet.isEmpty()) {
+            int remain = count - merged.size();
+            Set<Integer> existingIds = merged.stream().map(Question::getId).collect(Collectors.toSet());
+
+            QueryWrapper<Question> retryQuery = new QueryWrapper<>();
+            retryQuery.eq("module", module).in("id", wrongIdSet);
+            if (!existingIds.isEmpty()) {
+                retryQuery.notIn("id", existingIds);
+            }
+            retryQuery.last("ORDER BY RAND() LIMIT " + remain);
+            List<Question> retry = questionMapper.selectList(retryQuery);
+            merged.addAll(retry);
         }
 
         if (aiQuestions.isEmpty() && merged.isEmpty()) {
             fromCache = false;
         }
 
-        // 3. 统计池中总量
+        // 6. 统计池中总量
         QueryWrapper<AiQuestion> countQuery = new QueryWrapper<>();
         countQuery.eq("module", module).eq("status", "ACTIVE");
         int totalInPool = aiQuestionMapper.selectCount(countQuery).intValue();
@@ -142,7 +198,7 @@ public class XingceServiceImpl implements XingceService {
         result.setFromCache(fromCache);
         result.setTotalInPool(totalInPool);
 
-        // 4. 发布异步事件
+        // 7. 发布异步事件（补充题库）
         String moduleName = MODULE_NAMES.getOrDefault(module, module);
         eventPublisher.publishEvent(new QuestionGenerateEvent(this, userId, module, moduleName, count));
 
