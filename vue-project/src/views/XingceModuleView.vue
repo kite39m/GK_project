@@ -9,7 +9,17 @@
     <div v-if="loading" class="loading">加载中...</div>
 
     <div v-else-if="currentQuestion" class="question-area">
-      <div class="question-title">{{ currentQuestion.title }}</div>
+      <div class="question-title">
+        <span>{{ currentQuestion.title }}</span>
+        <div class="question-meta">
+          <span v-if="currentQuestion.difficulty" class="difficulty">
+            {{ '★'.repeat(currentQuestion.difficulty || 3) }}{{ '☆'.repeat(5 - (currentQuestion.difficulty || 3)) }}
+          </span>
+          <span v-if="currentQuestion.source" class="source-tag" :class="currentQuestion.source">
+            {{ sourceLabel(currentQuestion.source) }}
+          </span>
+        </div>
+      </div>
       <div class="options">
         <div
           v-for="(opt, idx) in parsedOptions"
@@ -53,6 +63,7 @@
 
     <div v-else class="empty">
       <p>该模块暂无题目</p>
+      <p v-if="generateError" class="error-msg">{{ generateError }}</p>
       <button class="generate-btn" @click="generateQuestions" :disabled="generating">
         {{ generating ? 'AI 出题中...' : 'AI 出题' }}
       </button>
@@ -82,6 +93,7 @@ const selectedAnswer = ref(null)
 const showResult = ref(false)
 const isCorrect = ref(false)
 const trapFeedback = ref(null)
+const generateError = ref('')
 const elapsed = ref(0)
 let timer = null
 
@@ -99,6 +111,11 @@ const formatTime = (s) => {
   const m = Math.floor(s / 60)
   const sec = s % 60
   return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+}
+
+const sourceLabel = (source) => {
+  const labels = { 'SEED': '真题', 'REAL_EXAM': '真题采集', 'AI_EXPAND': 'AI改编', 'AI_GEN': 'AI原创' }
+  return labels[source] || ''
 }
 
 const selectOption = (label) => {
@@ -139,6 +156,7 @@ const nextQuestion = () => {
 
 const generateQuestions = async () => {
   generating.value = true
+  generateError.value = ''
   try {
     const res = await axios.post('http://localhost:8080/api/xingce/generate', {
       userId: 1,
@@ -152,8 +170,13 @@ const generateQuestions = async () => {
       showResult.value = false
       trapFeedback.value = null
       elapsed.value = 0
+    } else {
+      generateError.value = '暂无可用题目，请稍后再试'
     }
-  } catch (e) { console.error('AI出题失败', e) }
+  } catch (e) {
+    console.error('AI出题失败', e)
+    generateError.value = e.code === 'ECONNABORTED' ? 'AI 出题超时，请稍后重试' : '出题失败，请检查网络连接'
+  }
   generating.value = false
 }
 
@@ -283,4 +306,22 @@ onUnmounted(() => { clearInterval(timer) })
   margin-top: 16px;
 }
 .generate-btn:disabled { background: #ccc; cursor: not-allowed; }
+.error-msg { color: #ff4d4f; font-size: 0.9rem; margin-bottom: 12px; }
+.question-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.difficulty { color: #faad14; font-size: 0.85rem; }
+.source-tag {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #f0f0f0;
+  color: #666;
+}
+.source-tag.REAL_EXAM { background: #e6f7ff; color: #1890ff; }
+.source-tag.AI_EXPAND { background: #fff7e6; color: #fa8c16; }
+.source-tag.AI_GEN { background: #f6ffed; color: #52c41a; }
 </style>
