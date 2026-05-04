@@ -20,9 +20,14 @@ public class WebConfig implements WebMvcConfigurer {
                 .excludePathPatterns(
                         "/api/auth/login",
                         "/api/chat/stream",
-                        "/api/xingce/diagnose",
+                        "/api/chat/sessions",
+                        "/api/chat/messages",
+                        "/api/chat/session",
+                        "/api/chat/save",
+                        "/api/xingce/**",
                         "/api/shenlun/essay/submit",
-                        "/api/shenlun/material/recommend"
+                        "/api/shenlun/material/recommend",
+                        "/api/collector/**"
                 );
     }
 }
