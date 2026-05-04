@@ -17,6 +17,8 @@ public class Question {
     private String answer;
     private String analysis;
     private String module;
+    private Integer difficulty;
+    private String source;
 
     // 下面是 Java 必须的 Get 和 Set 方法（方便存取数据）
     public Integer getId() { return id; }
@@ -39,4 +41,10 @@ public class Question {
 
     public String getModule() { return module; }
     public void setModule(String module) { this.module = module; }
+
+    public Integer getDifficulty() { return difficulty; }
+    public void setDifficulty(Integer difficulty) { this.difficulty = difficulty; }
+
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
 }

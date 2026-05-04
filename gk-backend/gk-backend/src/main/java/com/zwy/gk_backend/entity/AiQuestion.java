@@ -24,5 +24,7 @@ public class AiQuestion {
     private String status;
     private String sourceType;
     private String checkLog;
+    private Integer difficulty;
+    private Long parentId;
     private Date createdAt;
 }
