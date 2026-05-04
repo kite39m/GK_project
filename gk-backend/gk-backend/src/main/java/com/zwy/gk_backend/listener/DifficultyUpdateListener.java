@@ -28,7 +28,7 @@ public class DifficultyUpdateListener {
     @Async
     @EventListener
     public void onDifficultyUpdate(DifficultyUpdateEvent event) {
-        Integer questionId = event.getQuestionId();
+        Long questionId = event.getQuestionId();
 
         // 统计该题的答题数据
         QueryWrapper<UserAnswerRecord> query = new QueryWrapper<>();

@@ -1,1131 +1,1034 @@
 <template>
-  <div class="practice-layout">
-    <div class="desktop-card">
-      
-      <div class="practice-header">
-        <div class="header-left">
-          <span class="category-tag">{{ currentCategory }}</span>
-        </div>
-        <div class="timer-display">
-          <svg viewBox="0 0 1024 1024" width="18" height="18"><path d="M512 853.333333c-188.16 0-341.333333-153.173333-341.333333-341.333333s153.173333-341.333333 341.333333-341.333333 341.333333 153.173333 341.333333 341.333333-153.173333 341.333333-341.333333 341.333333z m0-640c-164.693333 0-298.666667 133.973333-298.666667 298.666667s133.973333 298.666667 298.666667 298.666667 298.666667-133.973333 298.666667-298.666667-133.973333-298.666667-298.666667-298.666667zM490.666667 533.333333h-170.666667a21.333333 21.333333 0 0 1 0-42.666666h149.333333v-170.666667a21.333333 21.333333 0 0 1 42.666667 0v192a21.333333 21.333333 0 0 1-21.333333 21.333333z" fill="currentColor"></path></svg>
-          <span class="time-text">{{ isFinished ? formatTotalTime : formatTime }}</span>
+  <div class="practice-container">
+    <Transition name="fade-up" mode="out-in">
+      <!-- ========== 阶段一：设置 ========== -->
+      <div v-if="practiceState === 'setup'" key="setup" class="setup-phase">
+        <div class="bg-blob"></div>
+        <div class="setup-card fade-in">
+          <div class="setup-header">
+            <div class="brand">
+              <span class="logo-dot"></span>
+              <span class="logo-text">SpeedCalc</span>
+            </div>
+            <h1 class="setup-title">赵文阳的专属备考智库</h1>
+            <p class="setup-subtitle">精准攻克行测速算</p>
+          </div>
+
+          <div class="setup-form">
+            <div class="form-item">
+              <label class="form-label">题型选择</label>
+              <div class="select-wrapper">
+                <select v-model="selectedType" class="setup-select">
+                  <option value="资料分析基期量计算">资料分析基期量计算</option>
+                  <option value="截位直除">截位直除</option>
+                  <option value="增长量计算">增长量计算</option>
+                  <option value="多位数乘除">多位数乘除</option>
+                  <option value="分数比较大小">分数比较大小</option>
+                  <option value="比重计算">比重计算</option>
+                </select>
+                <svg class="select-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </div>
+            </div>
+
+            <button class="btn-start" @click="startPractice" :disabled="loading">
+              <span v-if="loading" class="spinner"></span>
+              <template v-else>开始生成</template>
+            </button>
+          </div>
         </div>
       </div>
 
-      <div v-if="isLoading" class="loading-state">
-        <div class="spinner"></div>
-        <p>正在为您构建专属题库，请稍候...</p>
+      <!-- ========== 阶段二：答题 ========== -->
+      <div v-else-if="practiceState === 'practicing'" key="practicing" class="practice-phase">
+        <!-- 顶部状态栏 -->
+        <div class="topbar">
+          <div class="topbar-left">
+            <span class="topbar-label">第 <b>{{ currentIndex + 1 }}</b> / {{ questions.length }} 题</span>
+            <div class="progress-track">
+              <div class="progress-fill" :style="{ width: progressPercent + '%' }"></div>
+            </div>
+          </div>
+          <div class="topbar-right">
+            <div class="timer-chip">
+              <span class="timer-label">本题</span>
+              <span class="timer-val">{{ currentQuestionTime }}s</span>
+            </div>
+            <div class="timer-chip timer-chip--dark">
+              <span class="timer-label">总用时</span>
+              <span class="timer-val">{{ totalTimeFormatted }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 题目卡片 -->
+        <Transition name="slide-fade" mode="out-in">
+          <div :key="currentIndex" class="question-card">
+            <span class="q-badge">Q{{ currentIndex + 1 }}</span>
+            <p class="q-text">{{ currentQuestion.question }}</p>
+
+            <div class="options">
+              <button
+                v-for="(opt, idx) in currentQuestion.options"
+                :key="idx"
+                class="opt-btn"
+                :class="{ 'opt-btn--active': userAnswer === opt }"
+                @click="selectOption(opt)"
+              >
+                <span class="opt-letter" :class="{ 'opt-letter--active': userAnswer === opt }">{{ ['A','B','C','D'][idx] }}</span>
+                <span class="opt-text">{{ opt }}</span>
+                <Transition name="check-pop">
+                  <span v-if="userAnswer === opt" class="opt-check">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  </span>
+                </Transition>
+              </button>
+            </div>
+          </div>
+        </Transition>
+
+        <!-- 底部按钮 -->
+        <div class="bottom-bar">
+          <button class="btn-next" :class="{ 'btn-next--active': userAnswer }" :disabled="!userAnswer" @click="nextQuestion">
+            {{ currentIndex === questions.length - 1 ? '提交并查看报告' : '下一题' }}
+          </button>
+        </div>
       </div>
 
-      <div v-else-if="!isFinished && questions.length > 0" class="question-container fade-in">
-        
-        <div class="progress-indicator">
-          <span>Question {{ currentIndex + 1 }}</span>
-          <span class="progress-total">/ {{ questions.length }}</span>
-        </div>
-        
-        <div class="equation-box">
-          {{ currentQuestion.title }}
+      <!-- ========== 阶段三：复盘 ========== -->
+      <div v-else-if="practiceState === 'result'" key="result" class="result-phase">
+        <!-- 数据看板 -->
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-value">{{ accuracy }}<span class="stat-unit">%</span></div>
+            <div class="stat-label">正确率</div>
+            <div class="stat-sub">{{ correctCount }}/{{ questions.length }} 题</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value stat-value--mono">{{ totalTimeFormatted }}</div>
+            <div class="stat-label">总耗时</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value stat-value--mono">{{ avgTimePerQuestion }}<span class="stat-unit">s</span></div>
+            <div class="stat-label">平均用时</div>
+          </div>
         </div>
 
-        <div class="hint-text">请选择最符合逻辑的答案</div>
-
-        <div class="options-grid">
-          <button 
-            v-for="opt in currentQuestion.options" 
-            :key="opt.key"
-            class="option-card"
-            :class="{
-              'is-correct': selectedOption === opt.key && isCorrect === true,
-              'is-wrong': selectedOption === opt.key && isCorrect === false
-            }"
-            @click="handleSelect(opt.key)"
-            :disabled="isWaiting"
+        <!-- 解析列表 -->
+        <div class="review-list">
+          <div
+            v-for="(q, idx) in questions"
+            :key="idx"
+            class="review-card"
+            :class="q.isCorrect ? 'review-card--ok' : 'review-card--fail'"
           >
-            <span class="opt-key">{{ opt.key }}</span>
-            <span class="opt-value">{{ opt.value }}</span>
+            <div class="review-head">
+              <span class="review-idx">Q{{ idx + 1 }}</span>
+              <span class="review-badge" :class="q.isCorrect ? 'badge-ok' : 'badge-fail'">
+                {{ q.isCorrect ? '正确' : '错误' }}
+              </span>
+              <span class="review-time">{{ q.timeSpent }}s</span>
+            </div>
+
+            <p class="review-question">{{ q.question }}</p>
+
+            <div class="review-opts">
+              <div
+                v-for="(opt, oi) in q.options"
+                :key="oi"
+                class="review-opt"
+                :class="{
+                  'review-opt--correct': opt === q.exactAnswer,
+                  'review-opt--wrong': opt === q.userAnswer && !q.isCorrect,
+                  'review-opt--dim': opt !== q.exactAnswer && opt !== q.userAnswer
+                }"
+              >
+                <span class="review-opt-l">{{ ['A','B','C','D'][oi] }}</span>
+                <span class="review-opt-t">{{ opt }}</span>
+                <span v-if="opt === q.exactAnswer" class="review-opt-icon review-opt-icon--ok">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </span>
+                <span v-else-if="opt === q.userAnswer && !q.isCorrect" class="review-opt-icon review-opt-icon--fail">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </span>
+              </div>
+            </div>
+
+            <div class="review-analysis">
+              <span class="skill-tag">{{ q.fastCalcSkill }}</span>
+              <div class="analysis-body">
+                <span class="analysis-label">解析</span>
+                <p class="analysis-text">{{ q.analysis }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 底部 -->
+        <div class="result-bottom">
+          <button class="btn-restart" @click="restart">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+            重新练习
           </button>
         </div>
       </div>
-
-      <div v-else-if="isFinished" class="result-container fade-in">
-        
-        <div class="result-hero">
-          <h1 class="result-title">尊敬的赵书记您辛苦了！</h1>
-          <p class="result-subtitle">本次训练已结束，以下是您的能力评估报告。</p>
-          
-          <div class="stats-grid">
-            <div class="stat-card">
-              <div class="stat-label">总耗时</div>
-              <div class="stat-value">{{ formatTotalTime }}</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">平均用时</div>
-              <div class="stat-value">{{ formatAverageTime }}<span class="unit"> /题</span></div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">正确率</div>
-              <div class="stat-value" :class="correctCount >= (questions.length * 0.8) ? 'text-success' : 'text-danger'">
-                {{ Math.round((correctCount / questions.length) * 100) }}<span class="unit">%</span>
-              </div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">战绩</div>
-              <div class="stat-value">{{ correctCount }}<span class="unit"> / {{ questions.length }}</span></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="review-section">
-          <h2 class="section-heading">答题明细追踪</h2>
-          
-          <div class="review-list">
-            <div 
-              v-for="(res, index) in questionResults" 
-              :key="index" 
-              class="review-item" 
-              :class="{'has-error': !res.isCorrect}"
-            >
-              <div class="review-header" @click="res.showAnalysis = !res.showAnalysis">
-                <div class="header-main">
-                  <span class="q-index">Q{{ index + 1 }}</span>
-                  <span class="q-title-preview">{{ res.title }}</span>
-                </div>
-                <div class="header-meta">
-                  <span class="meta-time">{{ res.timeSpent }}s</span>
-                  <span class="meta-status" :class="res.isCorrect ? 'status-good' : 'status-bad'">
-                    {{ res.isCorrect ? 'Correct' : 'Error' }}
-                  </span>
-                  <span class="chevron" :class="{'is-open': res.showAnalysis}">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                  </span>
-                </div>
-              </div>
-
-              <div v-if="res.showAnalysis" class="review-body">
-                
-                <div class="review-options">
-                  <div 
-                    v-for="opt in res.options" 
-                    :key="opt.key" 
-                    class="r-opt-item"
-                    :class="{
-                      'is-answer': opt.key === res.correctAnswer,
-                      'is-mistake': opt.key === res.userAnswer && !res.isCorrect
-                    }"
-                  >
-                    <span class="r-opt-key">{{ opt.key }}</span> {{ opt.value }}
-                  </div>
-                </div>
-
-                <div class="review-insight">
-                  <div class="insight-label">💡 算法解析</div>
-                  <div class="insight-text">{{ res.analysis }}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div class="action-footer">
-          <button class="btn-primary" @click="fetchQuestions('random')">继续随机模考</button>
-          <button class="btn-primary" style="background: #ef4444; margin-top: 12px;" @click="fetchQuestions('mistake')">
-            ⚔️ 清理我的错题本
-          </button>
-          <div class="secondary-btn-group" style="margin-top: 12px;">
-            <button class="btn-secondary" @click="fetchQuestions('category', '截位直除-强差距')">专项：强差距</button>
-            <button class="btn-secondary" @click="fetchQuestions('category', '基期量-正增长率')">专项：基期量</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    </Transition>
   </div>
 </template>
 
 <script setup>
-// 1. 所有的 import 必须放在最顶端
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
-import axios from 'axios'
-import { useRoute } from 'vue-router'
 
-// --- AI Agent 诊断模块 (开发中) ---
-const isAgentThinking = ref(false);
-const diagnosticResult = ref(null);
+const practiceState = ref('setup')
+const loading = ref(false)
+const selectedType = ref('资料分析基期量计算')
 
-/**
- * 触发智能诊断 Agent 工作流
- * @param {Number} qId 错题 ID
- * @param {String} userSteps 用户输入的草稿计算步骤
- */
-const handleAIDiagnose = async (qId, userSteps) => {
-  isAgentThinking.value = true;
+const questions = ref([])
+const currentIndex = ref(0)
+const userAnswer = ref(null)
+
+const currentQuestionTime = ref(0)
+const totalSeconds = ref(0)
+let questionTimer = null
+let totalTimer = null
+
+const currentQuestion = computed(() => questions.value[currentIndex.value])
+const correctCount = computed(() => questions.value.filter(q => q.isCorrect).length)
+const accuracy = computed(() => {
+  if (questions.value.length === 0) return 0
+  return Math.round((correctCount.value / questions.value.length) * 100)
+})
+const totalTimeFormatted = computed(() => {
+  const m = Math.floor(totalSeconds.value / 60)
+  const s = totalSeconds.value % 60
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+})
+const avgTimePerQuestion = computed(() => {
+  if (questions.value.length === 0) return 0
+  return Math.round(totalSeconds.value / questions.value.length)
+})
+const progressPercent = computed(() => {
+  if (questions.value.length === 0) return 0
+  return ((currentIndex.value + 1) / questions.value.length) * 100
+})
+
+function generateDistractors(exactAnswer) {
+  const answer = parseFloat(exactAnswer)
+  if (isNaN(answer)) {
+    return shuffleArray([exactAnswer, exactAnswer + '%', '≈' + exactAnswer, exactAnswer + '万'])
+  }
+  const distractors = new Set()
+  const multipliers = [0.9, 0.95, 1.05, 1.1, 1.15, 0.85, 1.2, 0.92]
+  let i = 0
+  while (distractors.size < 3 && i < multipliers.length) {
+    const val = answer * multipliers[i]
+    const rounded = Math.round(val * 100) / 100
+    if (rounded !== answer && rounded > 0) distractors.add(String(rounded))
+    i++
+  }
+  let fallback = 1
+  while (distractors.size < 3) {
+    const val = answer + fallback * (answer > 0 ? 1 : -1) * Math.ceil(answer * 0.1)
+    const rounded = Math.round(val * 100) / 100
+    if (rounded !== answer) distractors.add(String(rounded))
+    fallback++
+  }
+  return shuffleArray([exactAnswer, ...distractors])
+}
+
+function shuffleArray(arr) {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
+function startTimers() {
+  currentQuestionTime.value = 0
+  totalSeconds.value = 0
+  questionTimer = setInterval(() => { currentQuestionTime.value++ }, 1000)
+  totalTimer = setInterval(() => { totalSeconds.value++ }, 1000)
+}
+function resetQuestionTimer() { currentQuestionTime.value = 0 }
+function stopTimers() {
+  clearInterval(questionTimer)
+  clearInterval(totalTimer)
+  questionTimer = null
+  totalTimer = null
+}
+onBeforeUnmount(stopTimers)
+
+async function startPractice() {
+  loading.value = true
   try {
-    // 调用后端 Agent 推演接口
-    // const res = await axios.post(`/api/wrong-question/diagnose/${qId}`, { draftSteps: userSteps });
-    
-    // 模拟等待长链推理的延迟
-    console.log('[Frontend] Waiting for Diagnostic Agent response...');
-    
-    // TODO: 接收到 JSON payload 后，使用富文本渲染错题归因和变式题
-    // diagnosticResult.value = res.data;
+    const token = localStorage.getItem('token')
+    const headers = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
+    const url = `http://localhost:8080/api/practice/speed-calc/generate?type=${encodeURIComponent(selectedType.value)}&count=10`
+    const res = await fetch(url, { headers })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    questions.value = data.map(q => ({
+      ...q,
+      options: generateDistractors(q.exactAnswer),
+      userAnswer: null,
+      isCorrect: false,
+      timeSpent: 0,
+    }))
+    currentIndex.value = 0
+    userAnswer.value = null
+    practiceState.value = 'practicing'
+    startTimers()
   } catch (error) {
-    console.error('Agent workflow failed:', error);
+    ElMessage.error('生成失败，请确认后端已启动')
+    console.error(error)
   } finally {
-    isAgentThinking.value = false;
+    loading.value = false
   }
-};
+}
 
-const route = useRoute();
+function selectOption(opt) { userAnswer.value = opt }
 
-// 2. 状态声明区（先声明，后使用，保证逻辑严密）
-const isLoading = ref(true);
-const questions = ref([]);
-const currentCategory = ref("准备中...");
-const currentIndex = ref(0);
-const isFinished = ref(false);
-const correctCount = ref(0);
-
-const selectedOption = ref(null);
-const isCorrect = ref(null);
-const isWaiting = ref(false);
-
-const seconds = ref(0);       // 单题计时
-const totalSeconds = ref(0);  // 总计时
-let timerInterval = null;
-
-const questionResults = ref([]);
-
-const currentQuestion = computed(() => questions.value[currentIndex.value] || {});
-
-// 3. 核心方法区
-const fetchQuestions = async (mode = 'random', categoryName = '') => {
-  isLoading.value = true;
-  isFinished.value = false;
-  currentIndex.value = 0;
-  correctCount.value = 0;
-  seconds.value = 0;
-  totalSeconds.value = 0;
-  questionResults.value = []; 
-  selectedOption.value = null;
-  isCorrect.value = null;
-  isWaiting.value = false;
-  stopTimer();
-
-  try {
-    let url = '';
-    if (mode === 'random') {
-      url = 'http://localhost:8080/api/question/random-ten';
-      currentCategory.value = '综合随机模考 (10题)';
-    } else if (mode === 'category') {
-      url = `http://localhost:8080/api/question/category?name=${categoryName}`;
-      currentCategory.value = `${categoryName} 专项`;
-    } else if (mode === 'mistake') {
-      url = `http://localhost:8080/api/wrong-question/list?userId=1`;
-      currentCategory.value = '我的错题本';
-    }
-
-    const response = await axios.get(url);
-    const rawData = response.data;
-
-    // 🔥 修复死胡同逻辑：如果错题本为空，不要卡死，直接跳转去随机模考！
-    if (rawData.length === 0 && mode === 'mistake') {
-       ElMessage.success({ message: '太棒了！错题本已被清空！为你开启随机模考~', duration: 3000 });
-       return fetchQuestions('random'); 
-    }
-
-    questions.value = rawData.map(item => {
-      const parsedOptions = JSON.parse(item.optionsJson);
-      const optionsArray = Object.keys(parsedOptions).map(key => ({
-        key: key,
-        value: parsedOptions[key]
-      }));
-      return { ...item, options: optionsArray }
-    });
-
-    isLoading.value = false;
-    startTimer();
-  } catch (error) {
-    ElMessage.error('获取题库失败，请确保 Spring Boot 后端已启动！');
-    isLoading.value = false;
+function nextQuestion() {
+  if (!userAnswer.value) return
+  const q = questions.value[currentIndex.value]
+  q.userAnswer = userAnswer.value
+  q.isCorrect = userAnswer.value === q.exactAnswer
+  q.timeSpent = currentQuestionTime.value
+  if (currentIndex.value >= questions.value.length - 1) {
+    stopTimers()
+    practiceState.value = 'result'
+    return
   }
-};
+  currentIndex.value++
+  userAnswer.value = null
+  resetQuestionTimer()
+}
 
-// 🔥 修复点：加上了 async 关键字，否则里面的 await 会报错！
-const handleSelect = async (optKey) => {
-  if (isWaiting.value) return;
-  
-  selectedOption.value = optKey;
-  isWaiting.value = true;
-  const currentIsCorrect = (optKey === currentQuestion.value.answer);
-   
-  const currentUserId = 1;
-
-  if (currentIsCorrect) {
-    isCorrect.value = true;
-    correctCount.value++;
-    ElMessage({ message: '正确', type: 'success', duration: 1000 });
-  
-    if (currentCategory.value === '我的错题本') {
-        // 对于不需要立刻等待结果的斩杀操作，可以不用 await 阻塞前端
-        axios.post(`http://localhost:8080/api/wrong-question/master?userId=${currentUserId}&questionId=${currentQuestion.value.id}`).catch(e => console.warn(e));
-    }
-  } else {
-    isCorrect.value = false;
-    ElMessage({ message: `失误了，正确答案: ${currentQuestion.value.answer}`, type: 'error', duration: 2000 });
-    
-    // 静默上报错题（这里使用了 await，必须保证外层方法是 async 的）
-    try {
-      await axios.post(`http://localhost:8080/api/wrong-question/record?userId=${currentUserId}&questionId=${currentQuestion.value.id}`);
-    } catch (e) {
-      console.warn('错题上报失败', e);
-    }
-  }
-
-  questionResults.value.push({
-    title: currentQuestion.value.title,
-    options: currentQuestion.value.options,
-    correctAnswer: currentQuestion.value.answer,
-    userAnswer: optKey,
-    isCorrect: currentIsCorrect,
-    timeSpent: seconds.value,
-    analysis: currentQuestion.value.analysis,
-    showAnalysis: false 
-  });
-
-  setTimeout(() => {
-    if (currentIndex.value < questions.value.length - 1) {
-      currentIndex.value++;
-      selectedOption.value = null;
-      isCorrect.value = null;
-      isWaiting.value = false;
-      seconds.value = 0; 
-    } else {
-      stopTimer();
-      isFinished.value = true;
-    }
-  }, 1000);
-};
-
-// 4. 计时与格式化区
-const startTimer = () => {
-  if (!timerInterval) {
-    timerInterval = setInterval(() => { 
-      if (!isWaiting.value) { seconds.value++; }
-      totalSeconds.value++;
-    }, 1000);
-  }
-};
-
-const stopTimer = () => { 
-  if (timerInterval) {
-    clearInterval(timerInterval); 
-    timerInterval = null; 
-  }
-};
-
-const formatTime = computed(() => {
-  const m = Math.floor(seconds.value / 60);
-  const s = seconds.value % 60;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-});
-
-const formatTotalTime = computed(() => {
-  const m = Math.floor(totalSeconds.value / 60);
-  const s = totalSeconds.value % 60;
-  return `${String(m).padStart(2, '0')}分${String(s).padStart(2, '0')}秒`;
-});
-
-const formatAverageTime = computed(() => {
-  if (questions.value.length === 0) return '0秒';
-  const avg = Math.floor(totalSeconds.value / questions.value.length);
-  return `${avg}秒`;
-});
-
-// 5. 生命周期钩子 (Lifecycle Hooks 放在最后)
-onMounted(() => { 
-  const initMode = route.query.mode || 'random';
-  fetchQuestions(initMode); 
-});
-
-onUnmounted(() => { stopTimer(); });
+function restart() {
+  stopTimers()
+  questions.value = []
+  currentIndex.value = 0
+  userAnswer.value = null
+  currentQuestionTime.value = 0
+  totalSeconds.value = 0
+  practiceState.value = 'setup'
+}
 </script>
 
 <style scoped>
-/* =========================================
-   全局架构与字体设定 (SaaS Desktop First)
-========================================= */
-.practice-layout {
-  min-height: 100vh;
-  background-color: #fafafa;
+/* ==================== Transitions ==================== */
+.fade-up-enter-active, .fade-up-leave-active {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.fade-up-enter-from {
+  opacity: 0; transform: translateY(16px);
+}
+.fade-up-leave-to {
+  opacity: 0; transform: translateY(-12px);
+}
+
+.slide-fade-enter-active {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.slide-fade-leave-active {
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.slide-fade-enter-from {
+  opacity: 0; transform: translateX(20px);
+}
+.slide-fade-leave-to {
+  opacity: 0; transform: translateX(-20px);
+}
+
+.check-pop-enter-active {
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.check-pop-leave-active {
+  transition: all 0.12s ease-in;
+}
+.check-pop-enter-from, .check-pop-leave-to {
+  opacity: 0; transform: scale(0.5);
+}
+
+.fade-in {
+  animation: fadeIn 0.6s ease-out;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ==================== 阶段一：设置 ==================== */
+.practice-container {
+  flex: 1;
+  min-height: 0;
+  background: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-y: auto;
+}
+
+.setup-phase {
   display: flex;
   justify-content: center;
-  align-items: flex-start;
-  padding: 40px 20px 80px;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  align-items: center;
+  min-height: 100%;
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.bg-blob {
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(170, 59, 255, 0.06) 0%, rgba(255, 255, 255, 0) 70%);
+  top: -80px;
+  right: -80px;
+  filter: blur(60px);
+  z-index: 0;
+}
+
+.setup-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 48px 40px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 24px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.03);
+  z-index: 1;
+}
+
+.setup-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.logo-dot {
+  width: 10px;
+  height: 10px;
+  background: #111;
+  border-radius: 50%;
+}
+
+.logo-text {
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: -0.02em;
   color: #111;
 }
 
-.desktop-card {
-  width: 100%;
-  max-width: 900px;
-  background: #ffffff;
-  border-radius: 24px;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.03), 0 1px 2px rgba(0, 0, 0, 0.02);
-  overflow: hidden;
-  position: relative;
-  border: 1px solid rgba(0, 0, 0, 0.04);
-}
-
-/* =========================================
-   顶部 Header 
-========================================= */
-.practice-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 24px 40px;
-  border-bottom: 1px solid #f2f2f2;
-}
-
-.category-tag {
-  font-size: 14px;
+.setup-title {
+  font-size: 1.6rem;
   font-weight: 600;
-  color: #555;
-  background: #f4f4f5;
-  padding: 6px 14px;
-  border-radius: 999px;
+  color: #111;
+  margin: 0 0 8px;
+  letter-spacing: -0.02em;
+}
+
+.setup-subtitle {
+  font-size: 0.9rem;
+  color: #999;
+  margin: 0;
+}
+
+.setup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-item {
+  margin-bottom: 20px;
+}
+
+.form-label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #444;
+  margin-bottom: 8px;
+  margin-left: 2px;
+}
+
+.select-wrapper {
+  position: relative;
+}
+
+.setup-select {
+  width: 100%;
+  padding: 14px 42px 14px 16px;
+  background: #f9f9f9;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  color: #111;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.setup-select:focus {
+  border-color: #111;
+  background: #fff;
+}
+
+.select-arrow {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.btn-start {
+  width: 100%;
+  padding: 16px;
+  background: #111;
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-start:hover:not(:disabled) {
+  background: #333;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+.btn-start:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ==================== 阶段二：答题 ==================== */
+.practice-phase {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 20px 20px 40px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.topbar-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.topbar-label {
+  display: block;
+  font-size: 0.82rem;
+  color: #999;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.topbar-label b {
+  color: #111;
+  font-size: 0.95rem;
+}
+
+.progress-track {
+  height: 4px;
+  background: #eee;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #111;
+  border-radius: 2px;
+  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.topbar-right {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.timer-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #f5f5f5;
+  border-radius: 8px;
+}
+
+.timer-chip--dark {
+  background: #111;
+}
+
+.timer-label {
+  font-size: 0.7rem;
+  color: #999;
+  font-weight: 500;
+}
+
+.timer-chip--dark .timer-label {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.timer-val {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #111;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+}
+
+.timer-chip--dark .timer-val {
+  color: #fff;
+}
+
+/* 题目卡片 */
+.question-card {
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 18px;
+  padding: 32px 28px;
+}
+
+.q-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #999;
+  background: #f5f5f5;
+  padding: 3px 10px;
+  border-radius: 6px;
+  margin-bottom: 16px;
   letter-spacing: 0.02em;
 }
 
-.timer-display {
+.q-text {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #111;
+  line-height: 1.7;
+  margin: 0 0 28px;
+}
+
+.options {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 8px;
-  color: #888;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 15px;
 }
 
-/* =========================================
-   答题区 (Question Area)
-========================================= */
-.question-container {
-  padding: 60px 80px 80px;
-}
-
-.progress-indicator {
-  font-size: 14px;
-  font-weight: 600;
-  color: #a0a0a0;
-  margin-bottom: 24px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-.progress-total { color: #d0d0d0; }
-
-.equation-box {
-  font-size: 3.5rem;
-  font-weight: 700;
-  color: #111;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-  margin-bottom: 20px;
-  word-break: break-all;
-}
-
-.hint-text {
-  font-size: 15px;
-  color: #999;
-  margin-bottom: 60px;
-}
-
-.options-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 24px;
-}
-
-.option-card {
-  background: #ffffff;
-  border: 1px solid #eaeaea;
-  border-radius: 16px;
-  padding: 28px 32px;
-  text-align: left;
-  cursor: pointer;
-  display: flex;
-  align-items: baseline;
-  gap: 16px;
-  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.option-card:hover:not(:disabled) {
-  border-color: #d0d0d0;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
-}
-
-.option-card:active:not(:disabled) { transform: translateY(0); }
-
-.opt-key {
-  font-size: 18px;
-  font-weight: 700;
-  color: #888;
-}
-
-.opt-value {
-  font-size: 22px;
-  font-weight: 600;
-  color: #222;
-}
-
-.option-card.is-correct {
-  background: #f4fdf8;
-  border-color: #a3e6cd;
-}
-.option-card.is-correct .opt-key, .option-card.is-correct .opt-value { color: #10b981; }
-
-.option-card.is-wrong {
-  background: #fef8f8;
-  border-color: #fca5a5;
-}
-.option-card.is-wrong .opt-key, .option-card.is-wrong .opt-value { color: #ef4444; }
-
-/* =========================================
-   结算仪表盘 (Result Dashboard)
-========================================= */
-.result-container {
-  padding: 60px 80px 80px;
-}
-
-.result-hero {
-  text-align: center;
-  margin-bottom: 60px;
-}
-
-.result-title {
-  font-size: 2.25rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: #111;
-  margin-bottom: 12px;
-}
-
-.result-subtitle {
-  font-size: 1.125rem;
-  color: #666;
-  margin-bottom: 48px;
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
-}
-
-.stat-card {
-  background: #f9f9f9;
-  border-radius: 16px;
-  padding: 24px;
-  text-align: center;
-}
-
-.stat-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: #888;
-  margin-bottom: 8px;
-}
-
-.stat-value {
-  font-size: 2rem;
-  font-weight: 700;
-  color: #111;
-  letter-spacing: -0.02em;
-}
-.stat-value .unit { font-size: 1rem; color: #aaa; font-weight: 500; }
-.text-success { color: #10b981; }
-.text-danger { color: #ef4444; }
-
-/* =========================================
-   明细解析 (Review Section)
-========================================= */
-.section-heading {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #111;
-  margin-bottom: 24px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #eaeaea;
-}
-
-.review-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.review-item {
-  border-bottom: 1px solid #f2f2f2;
-}
-.review-item:last-child { border-bottom: none; }
-
-.review-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 0;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-.review-header:hover { opacity: 0.7; }
-
-.header-main {
+.opt-btn {
   display: flex;
   align-items: center;
-  gap: 16px;
-}
-.q-index {
-  font-family: ui-monospace, monospace;
-  font-size: 14px;
-  color: #888;
-  font-weight: 600;
-}
-.q-title-preview {
-  font-size: 16px;
-  font-weight: 500;
-  color: #222;
-}
-
-.header-meta {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.meta-time { font-size: 14px; color: #aaa; }
-.meta-status {
-  font-size: 13px;
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 6px;
-}
-.status-good { background: #e6f6f0; color: #10b981; }
-.status-bad { background: #fef0f0; color: #ef4444; }
-
-.chevron { color: #ccc; transition: transform 0.3s ease; display: flex; }
-.chevron.is-open { transform: rotate(180deg); color: #111; }
-
-.review-body {
-  padding: 0 0 32px 0;
-  animation: slideDown 0.3s ease;
-}
-
-.review-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 16px;
-  margin-bottom: 24px;
-}
-
-.r-opt-item {
-  padding: 10px 16px;
-  background: #f7f7f8;
-  border-radius: 8px;
-  font-size: 15px;
-  color: #555;
-}
-.r-opt-key { font-weight: 600; margin-right: 4px; color: #888; }
-
-.r-opt-item.is-answer {
-  background: #f4fdf8;
-  color: #10b981;
-  font-weight: 500;
-}
-.r-opt-item.is-answer .r-opt-key { color: #10b981; }
-
-.r-opt-item.is-mistake {
-  background: #fef8f8;
-  color: #ef4444;
-  text-decoration: line-through;
-}
-
-.review-insight {
-  background: #f9f9f9;
+  gap: 14px;
+  width: 100%;
+  padding: 15px 16px;
+  background: #fafafa;
+  border: 1px solid #eee;
   border-radius: 12px;
-  padding: 20px;
-}
-.insight-label { font-weight: 600; color: #333; margin-bottom: 8px; font-size: 14px; }
-.insight-text { font-size: 15px; color: #555; line-height: 1.6; }
-
-/* =========================================
-   操作按钮区 (Footer Actions)
-========================================= */
-.action-footer {
-  margin-top: 60px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-}
-
-button { font-family: inherit; }
-
-.btn-primary {
-  background: #111;
-  color: #fff;
-  font-size: 16px;
-  font-weight: 500;
-  padding: 16px 40px;
-  border-radius: 999px;
-  border: none;
+  font-size: 0.95rem;
+  color: #333;
   cursor: pointer;
-  transition: all 0.2s;
-  width: 100%;
-  max-width: 400px;
-}
-.btn-primary:hover { background: #333; transform: translateY(-1px); }
-
-.secondary-btn-group {
-  display: flex;
-  gap: 12px;
-  width: 100%;
-  max-width: 400px;
-}
-
-.btn-secondary {
-  flex: 1;
-  background: #f4f4f5;
-  color: #444;
-  font-size: 14px;
-  font-weight: 500;
-  padding: 14px 20px;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.btn-secondary:hover { background: #ebebeb; color: #111; }
-
-/* =========================================
-   动画与加载态
-========================================= */
-.fade-in { animation: fadeIn 0.5s ease; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes slideDown { from { opacity: 0; margin-top: -10px; } to { opacity: 1; margin-top: 0; } }
-
-.loading-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 120px 0;
-  color: #888;
-}
-.spinner {
-  width: 32px; height: 32px;
-  border: 3px solid #f3f3f3; border-top: 3px solid #111;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 20px;
-}
-@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-@media (max-width: 768px) {
-  .question-container, .result-container { padding: 40px 24px; }
-  .equation-box { font-size: 2.5rem; }
-  .options-grid { grid-template-columns: 1fr; }
-  .stats-grid { grid-template-columns: repeat(2, 1fr); }
-}
-</style>
-<style scoped>
-/* =========================================
-   全局架构与字体设定 (SaaS Desktop First)
-========================================= */
-.practice-layout {
-  min-height: 100vh;
-  background-color: #fafafa;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding: 40px 20px 80px;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  color: #111;
-}
-
-/* 打破原本 480px 的局限，加宽到 900px，形成桌面级沉浸大屏 */
-.desktop-card {
-  width: 100%;
-  max-width: 900px;
-  background: #ffffff;
-  border-radius: 24px;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.03), 0 1px 2px rgba(0, 0, 0, 0.02);
-  overflow: hidden;
+  text-align: left;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
-  border: 1px solid rgba(0, 0, 0, 0.04);
 }
 
-/* =========================================
-   顶部 Header 
-========================================= */
-.practice-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 24px 40px;
-  border-bottom: 1px solid #f2f2f2;
+.opt-btn:hover {
+  background: #f5f5f5;
+  border-color: #ddd;
+  transform: translateY(-1px);
 }
 
-.category-tag {
-  font-size: 14px;
-  font-weight: 600;
-  color: #555;
-  background: #f4f4f5;
-  padding: 6px 14px;
-  border-radius: 999px;
-  letter-spacing: 0.02em;
+.opt-btn--active {
+  background: #f5f5f5;
+  border-color: #111;
+  border-width: 1.5px;
+  padding: 14.5px 15.5px;
 }
 
-.timer-display {
+.opt-letter {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: #888;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 15px;
-}
-
-/* =========================================
-   答题区 (Question Area)
-========================================= */
-.question-container {
-  padding: 60px 80px 80px;
-}
-
-.progress-indicator {
-  font-size: 14px;
-  font-weight: 600;
-  color: #a0a0a0;
-  margin-bottom: 24px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-.progress-total { color: #d0d0d0; }
-
-.equation-box {
-  font-size: 3.5rem;
-  font-weight: 700;
-  color: #111;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-  margin-bottom: 20px;
-  word-break: break-all;
-}
-
-.hint-text {
-  font-size: 15px;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #eee;
+  font-size: 0.75rem;
+  font-weight: 800;
   color: #999;
-  margin-bottom: 60px;
+  flex-shrink: 0;
+  transition: all 0.18s;
 }
 
-/* 核心改造：使用 CSS Grid 将选项变为 2x2 网格，更适配宽屏 */
-.options-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 24px;
+.opt-letter--active {
+  background: #111;
+  color: #fff;
 }
 
-.option-card {
-  background: #ffffff;
-  border: 1px solid #eaeaea;
-  border-radius: 16px;
-  padding: 28px 32px;
-  text-align: left;
-  cursor: pointer;
+.opt-text {
+  flex: 1;
+  font-weight: 500;
+}
+
+.opt-check {
+  flex-shrink: 0;
   display: flex;
-  align-items: baseline;
-  gap: 16px;
-  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  align-items: center;
 }
 
-.option-card:hover:not(:disabled) {
-  border-color: #d0d0d0;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+/* 底部按钮 */
+.bottom-bar {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
 }
 
-.option-card:active:not(:disabled) { transform: translateY(0); }
-
-.opt-key {
-  font-size: 18px;
-  font-weight: 700;
-  color: #888;
-}
-
-.opt-value {
-  font-size: 22px;
+.btn-next {
+  width: 100%;
+  padding: 14px 32px;
+  background: #eee;
+  color: #bbb;
+  border: none;
+  border-radius: 999px;
+  font-size: 0.9rem;
   font-weight: 600;
-  color: #222;
+  cursor: not-allowed;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* 选项状态 */
-.option-card.is-correct {
-  background: #f4fdf8;
-  border-color: #a3e6cd;
-}
-.option-card.is-correct .opt-key, .option-card.is-correct .opt-value { color: #10b981; }
-
-.option-card.is-wrong {
-  background: #fef8f8;
-  border-color: #fca5a5;
-}
-.option-card.is-wrong .opt-key, .option-card.is-wrong .opt-value { color: #ef4444; }
-
-/* =========================================
-   结算仪表盘 (Result Dashboard)
-========================================= */
-.result-container {
-  padding: 60px 80px 80px;
+.btn-next--active {
+  background: #111;
+  color: #fff;
+  cursor: pointer;
 }
 
-.result-hero {
-  text-align: center;
-  margin-bottom: 60px;
+.btn-next--active:hover {
+  background: #333;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
 }
 
-.result-title {
-  font-size: 2.25rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: #111;
-  margin-bottom: 12px;
+/* ==================== 阶段三：复盘 ==================== */
+.result-phase {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 24px 20px 80px;
 }
 
-.result-subtitle {
-  font-size: 1.125rem;
-  color: #666;
-  margin-bottom: 48px;
-}
-
-/* 数据卡片网格 */
-.stats-grid {
+.stats-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 28px;
 }
 
 .stat-card {
-  background: #f9f9f9;
+  background: #fff;
+  border: 1px solid #eee;
   border-radius: 16px;
-  padding: 24px;
+  padding: 20px 16px;
   text-align: center;
 }
 
-.stat-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: #888;
-  margin-bottom: 8px;
-}
-
 .stat-value {
-  font-size: 2rem;
+  font-size: 1.8rem;
   font-weight: 700;
   color: #111;
-  letter-spacing: -0.02em;
-}
-.stat-value .unit { font-size: 1rem; color: #aaa; font-weight: 500; }
-.text-success { color: #10b981; }
-.text-danger { color: #ef4444; }
-
-/* =========================================
-   明细解析 (Review Section)
-========================================= */
-.section-heading {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #111;
-  margin-bottom: 24px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #eaeaea;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
+.stat-value--mono {
+  font-family: ui-monospace, "SF Mono", monospace;
+}
+
+.stat-unit {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #999;
+}
+
+.stat-label {
+  font-size: 0.78rem;
+  color: #999;
+  margin-top: 6px;
+  font-weight: 500;
+}
+
+.stat-sub {
+  font-size: 0.72rem;
+  color: #bbb;
+  margin-top: 2px;
+}
+
+/* 解析列表 */
 .review-list {
   display: flex;
   flex-direction: column;
+  gap: 14px;
 }
 
-.review-item {
-  border-bottom: 1px solid #f2f2f2;
+.review-card {
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 16px;
+  padding: 24px;
 }
-.review-item:last-child { border-bottom: none; }
 
-.review-header {
+.review-card--ok {
+  border-left: 3px solid #10b981;
+}
+
+.review-card--fail {
+  border-left: 3px solid #ef4444;
+}
+
+.review-head {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 20px 0;
-  cursor: pointer;
-  transition: opacity 0.2s;
+  gap: 8px;
+  margin-bottom: 14px;
 }
-.review-header:hover { opacity: 0.7; }
 
-.header-main {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+.review-idx {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #bbb;
+  background: #f5f5f5;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
 }
-.q-index {
-  font-family: ui-monospace, monospace;
-  font-size: 14px;
-  color: #888;
+
+.review-badge {
+  font-size: 0.72rem;
   font-weight: 600;
-}
-.q-title-preview {
-  font-size: 16px;
-  font-weight: 500;
-  color: #222;
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
-.header-meta {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+.badge-ok {
+  background: #d1fae5;
+  color: #059669;
 }
-.meta-time { font-size: 14px; color: #aaa; }
-.meta-status {
-  font-size: 13px;
+
+.badge-fail {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.review-time {
+  margin-left: auto;
+  font-size: 0.78rem;
   font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 6px;
-}
-.status-good { background: #e6f6f0; color: #10b981; }
-.status-bad { background: #fef0f0; color: #ef4444; }
-
-.chevron { color: #ccc; transition: transform 0.3s ease; display: flex; }
-.chevron.is-open { transform: rotate(180deg); color: #111; }
-
-.review-body {
-  padding: 0 0 32px 0;
-  animation: slideDown 0.3s ease;
+  color: #ccc;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "SF Mono", monospace;
 }
 
-/* 解析区的选项展示，横向排列 */
-.review-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 16px;
-  margin-bottom: 24px;
+.review-question {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #111;
+  line-height: 1.6;
+  margin: 0 0 14px;
 }
 
-.r-opt-item {
-  padding: 10px 16px;
-  background: #f7f7f8;
-  border-radius: 8px;
-  font-size: 15px;
-  color: #555;
-}
-.r-opt-key { font-weight: 600; margin-right: 4px; color: #888; }
-
-.r-opt-item.is-answer {
-  background: #f4fdf8;
-  color: #10b981;
-  font-weight: 500;
-}
-.r-opt-item.is-answer .r-opt-key { color: #10b981; }
-
-.r-opt-item.is-mistake {
-  background: #fef8f8;
-  color: #ef4444;
-  text-decoration: line-through;
-}
-
-.review-insight {
-  background: #f9f9f9;
-  border-radius: 12px;
-  padding: 20px;
-}
-.insight-label { font-weight: 600; color: #333; margin-bottom: 8px; font-size: 14px; }
-.insight-text { font-size: 15px; color: #555; line-height: 1.6; }
-
-/* =========================================
-   操作按钮区 (Footer Actions)
-========================================= */
-.action-footer {
-  margin-top: 60px;
+.review-opts {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 16px;
+  gap: 5px;
+  margin-bottom: 14px;
 }
 
-button { font-family: inherit; }
+.review-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  border: 1px solid transparent;
+}
 
-.btn-primary {
+.review-opt--dim {
+  background: #fafafa;
+  color: #bbb;
+}
+
+.review-opt--correct {
+  background: #d1fae5;
+  border-color: #10b981;
+  color: #065f46;
+  font-weight: 600;
+}
+
+.review-opt--wrong {
+  background: #fee2e2;
+  border-color: #ef4444;
+  color: #991b1b;
+  font-weight: 600;
+}
+
+.review-opt-l {
+  font-weight: 800;
+  font-size: 0.75rem;
+  width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.review-opt-t {
+  flex: 1;
+}
+
+.review-opt-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.review-opt-icon--ok { color: #10b981; }
+.review-opt-icon--fail { color: #ef4444; }
+
+/* 解析区 */
+.review-analysis {
+  background: #fafafa;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.skill-tag {
+  display: inline-block;
   background: #111;
   color: #fff;
-  font-size: 16px;
-  font-weight: 500;
-  padding: 16px 40px;
-  border-radius: 999px;
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s;
-  width: 100%;
-  max-width: 400px;
-}
-.btn-primary:hover { background: #333; transform: translateY(-1px); }
-
-.secondary-btn-group {
-  display: flex;
-  gap: 12px;
-  width: 100%;
-  max-width: 400px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 6px;
+  margin-bottom: 10px;
 }
 
-.btn-secondary {
-  flex: 1;
-  background: #f4f4f5;
-  color: #444;
-  font-size: 14px;
-  font-weight: 500;
-  padding: 14px 20px;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.btn-secondary:hover { background: #ebebeb; color: #111; }
-
-/* =========================================
-   动画与加载态
-========================================= */
-.fade-in { animation: fadeIn 0.5s ease; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes slideDown { from { opacity: 0; margin-top: -10px; } to { opacity: 1; margin-top: 0; } }
-
-.loading-state {
+.analysis-body {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 120px 0;
-  color: #888;
+  gap: 4px;
 }
-.spinner {
-  width: 32px; height: 32px;
-  border: 3px solid #f3f3f3; border-top: 3px solid #111;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 20px;
-}
-@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-/* 响应式回退：当屏幕真的小于电脑尺寸时，自动变为单列 */
-@media (max-width: 768px) {
-  .question-container, .result-container { padding: 40px 24px; }
-  .equation-box { font-size: 2.5rem; }
-  .options-grid { grid-template-columns: 1fr; }
-  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+.analysis-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #999;
+}
+
+.analysis-text {
+  font-size: 0.85rem;
+  color: #555;
+  line-height: 1.7;
+  margin: 0;
+}
+
+/* 底部 */
+.result-bottom {
+  margin-top: 32px;
+  text-align: center;
+}
+
+.btn-restart {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 13px 36px;
+  background: #111;
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s;
+}
+
+.btn-restart:hover {
+  background: #333;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* ==================== 响应式 ==================== */
+@media (max-width: 640px) {
+  .setup-card {
+    padding: 36px 24px;
+  }
+  .setup-title {
+    font-size: 1.3rem;
+  }
+  .topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .topbar-right {
+    justify-content: flex-end;
+  }
+  .question-card {
+    padding: 24px 20px;
+  }
+  .q-text {
+    font-size: 1rem;
+  }
+  .stats-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .review-card {
+    padding: 18px 16px;
+  }
 }
 </style>

@@ -2,9 +2,10 @@
 -- V2: 公考AI智能诊断模块 - 数据库表
 -- ============================================================
 
--- 1. 扩展 question 表：新增 module 字段
-ALTER TABLE question ADD COLUMN module VARCHAR(20) DEFAULT NULL COMMENT '模块编码: CHANGSHI/YUYU/ZILIAO/TUILI/SHULIANG';
-ALTER TABLE question ADD INDEX idx_module (module);
+-- 1. 扩展 question 表：新增 module 字段（如果尚未存在）
+-- 注意：V1 已包含 module 字段，此段仅对已有旧库生效
+-- ALTER TABLE question ADD COLUMN module VARCHAR(20) DEFAULT NULL COMMENT '模块编码: CHANGSHI/YUYU/ZILIAO/TUILI/SHULIANG';
+-- ALTER TABLE question ADD INDEX idx_module (module);
 
 -- 2. 用户答题记录明细表
 CREATE TABLE IF NOT EXISTS user_answer_records (

@@ -132,16 +132,14 @@ public class XingceServiceImpl implements XingceService {
             wrongIdSet.add(((Number) id).intValue());
         }
 
-        // 3. 从 ai_question_pool 检索（排除已答对 + 随机）
+        // 3. 从 ai_question_pool 检索（排除已答对 + 错题优先 + 随机）
         QueryWrapper<AiQuestion> aiQuery = new QueryWrapper<>();
         aiQuery.eq("module", module).eq("status", "ACTIVE");
         if (!correctIds.isEmpty()) {
             aiQuery.notIn("id", correctIds);
         }
-        aiQuery.orderByAsc(
-            "CASE WHEN id IN (" + (wrongIdSet.isEmpty() ? "0" : wrongIdSet.stream().map(String::valueOf).collect(Collectors.joining(","))) + ") THEN 0 ELSE 1 END"
-        );
-        aiQuery.last("ORDER BY RAND() LIMIT " + count);
+        String wrongIdsStr = wrongIdSet.isEmpty() ? "0" : wrongIdSet.stream().map(String::valueOf).collect(Collectors.joining(","));
+        aiQuery.last("ORDER BY CASE WHEN id IN (" + wrongIdsStr + ") THEN 0 ELSE 1 END, RAND() LIMIT " + count);
         List<AiQuestion> aiQuestions = aiQuestionMapper.selectList(aiQuery);
 
         for (AiQuestion aiq : aiQuestions) {

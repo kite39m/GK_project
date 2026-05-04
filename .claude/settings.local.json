@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(where mysql *)",
+      "Read(//c/Program Files/MySQL/**)",
+      "Read(//c/ProgramData/MySQL/**)",
+      "Bash(C:/Program Files/MySQL/MySQL Server 8.0/bin/mysql.exe *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(/c/Program Files/MySQL/MySQL Server 8.4/bin/mysql.exe *)"
+    ]
+  }
+}

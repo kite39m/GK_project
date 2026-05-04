@@ -1,16 +1,9 @@
 -- ============================================================
 -- V5: 题库体系扩展 - 难度系数 + 知识点标签
+-- 注意：所有语句均为幂等，可安全重复执行
 -- ============================================================
 
--- 1. question 表添加难度字段
-ALTER TABLE question ADD COLUMN difficulty INT DEFAULT 3 COMMENT '难度1-5';
-ALTER TABLE question ADD COLUMN source VARCHAR(20) DEFAULT 'SEED' COMMENT '来源: SEED/REAL_EXAM/AI_EXPAND/AI_GEN';
-
--- 2. ai_question_pool 表添加难度和关联字段
-ALTER TABLE ai_question_pool ADD COLUMN difficulty INT DEFAULT 3 COMMENT '难度1-5';
-ALTER TABLE ai_question_pool ADD COLUMN parent_id BIGINT DEFAULT NULL COMMENT '母题ID(AI扩写用)';
-
--- 3. 知识点标签表
+-- 1. 知识点标签表（IF NOT EXISTS 保证幂等）
 CREATE TABLE IF NOT EXISTS knowledge_point (
     id INT AUTO_INCREMENT PRIMARY KEY,
     module VARCHAR(20) NOT NULL COMMENT '模块编码',
@@ -21,7 +14,7 @@ CREATE TABLE IF NOT EXISTS knowledge_point (
     UNIQUE INDEX uk_concept (module, category, concept)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='知识点标签表';
 
--- 4. 种子知识点数据
+-- 2. 种子知识点数据（INSERT IGNORE 保证幂等）
 INSERT IGNORE INTO knowledge_point (module, category, concept, description, sort_order) VALUES
 -- 常识
 ('CHANGSHI', '政治', '政治制度', '根本政治制度、基本政治制度', 1),

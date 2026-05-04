@@ -1,13 +1,17 @@
 spring:
   # 数据库连接配置
   datasource:
-    # 这里的 3306 是 MySQL 默认端口，gk_db 是数据库名
-    url: jdbc:mysql://localhost:3306/gk_db?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
-    # 这里填写你本地 MySQL 的账号，通常是 root
+    # createDatabaseIfNotExist=true 会在数据库不存在时自动创建
+    url: jdbc:mysql://localhost:3306/gk_db?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&createDatabaseIfNotExist=true
     username: root
-    # 这里填写你本地 MySQL 的登录密码（务必改对，否则连不上）
     password: 123456
     driver-class-name: com.mysql.cj.jdbc.Driver
+
+  # Flyway 自动建表配置
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
 
 # 设置后端运行的端口
 server:
@@ -28,3 +32,4 @@ langchain4j:
       temperature: 0.7
       log-requests: true
       log-responses: true
+      timeout: PT120S
