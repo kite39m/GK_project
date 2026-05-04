@@ -56,7 +56,8 @@ public class QuestionGenerateListener {
 
         // 4. 解析 + 校验 + 去重 + 存储
         try {
-            List<Map<String, Object>> items = MAPPER.readValue(aiResponse, new TypeReference<>() {});
+            String json = stripMarkdownCodeBlock(aiResponse);
+            List<Map<String, Object>> items = MAPPER.readValue(json, new TypeReference<>() {});
             for (Map<String, Object> item : items) {
                 String title = (String) item.get("title");
                 String optionsJson = MAPPER.writeValueAsString(item.get("optionsJson"));
@@ -82,17 +83,37 @@ public class QuestionGenerateListener {
                 aiq.setAnswer(answer);
                 aiq.setAnalysis((String) item.get("analysis"));
                 aiq.setConcept((String) item.get("concept"));
+                if (aiq.getConcept() == null || aiq.getConcept().isEmpty()) {
+                    aiq.setConcept(aiq.getCategory());
+                }
                 aiq.setTrapOption((String) item.get("trapOption"));
                 aiq.setTrapAnalysisTemplate((String) item.get("trapAnalysisTemplate"));
                 aiq.setQuestionHash(hash);
                 aiq.setStatus("ACTIVE");
                 aiq.setSourceType("AI_GEN");
                 aiq.setCheckLog("OK");
+                aiq.setDifficulty(3);
                 aiQuestionMapper.insert(aiq);
             }
         } catch (Exception e) {
             System.err.println("AI题目生成解析失败: " + e.getMessage());
         }
+    }
+
+    private String stripMarkdownCodeBlock(String text) {
+        if (text == null) return null;
+        String trimmed = text.trim();
+        // 去掉 ```json ... ``` 或 ``` ... ``` 包裹
+        if (trimmed.startsWith("```")) {
+            int firstNewline = trimmed.indexOf('\n');
+            if (firstNewline > 0) {
+                trimmed = trimmed.substring(firstNewline + 1);
+            }
+            if (trimmed.endsWith("```")) {
+                trimmed = trimmed.substring(0, trimmed.length() - 3);
+            }
+        }
+        return trimmed.trim();
     }
 
     private String md5(String input) {
