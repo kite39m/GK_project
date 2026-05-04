@@ -6,7 +6,7 @@ import com.zwy.gk_backend.entity.UserAnswerRecord;
 import com.zwy.gk_backend.entity.UserKnowledgeProfile;
 import com.zwy.gk_backend.mapper.UserAnswerRecordMapper;
 import com.zwy.gk_backend.mapper.UserKnowledgeProfileMapper;
-import dev.langchain4j.service.tool.Tool;
+import dev.langchain4j.agent.tool.Tool;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
