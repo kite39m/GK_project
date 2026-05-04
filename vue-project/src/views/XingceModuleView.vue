@@ -32,6 +32,13 @@
           {{ isCorrect ? '✓ 回答正确' : '✗ 回答错误' }}
         </div>
         <div class="analysis">{{ currentQuestion.analysis }}</div>
+
+        <!-- 陷阱反馈卡片 -->
+        <div v-if="trapFeedback && trapFeedback.trap" class="trap-card">
+          <div class="trap-title">⚠️ 陷阱警示</div>
+          <div class="trap-text">{{ trapFeedback.trapAnalysis }}</div>
+          <div class="trap-count">该考点你已踩坑 {{ trapFeedback.trapCount }} 次</div>
+        </div>
       </div>
 
       <div class="actions">
@@ -46,7 +53,9 @@
 
     <div v-else class="empty">
       <p>该模块暂无题目</p>
-      <button class="back-btn" @click="$router.push('/xingce')">返回行测主页</button>
+      <button class="generate-btn" @click="generateQuestions" :disabled="generating">
+        {{ generating ? 'AI 出题中...' : 'AI 出题' }}
+      </button>
     </div>
   </div>
 </template>
@@ -68,9 +77,11 @@ const moduleName = computed(() => MODULE_NAMES[moduleCode.value] || moduleCode.v
 const questions = ref([])
 const currentIndex = ref(0)
 const loading = ref(true)
+const generating = ref(false)
 const selectedAnswer = ref(null)
 const showResult = ref(false)
 const isCorrect = ref(false)
+const trapFeedback = ref(null)
 const elapsed = ref(0)
 let timer = null
 
@@ -98,9 +109,10 @@ const submitAnswer = async () => {
   if (!selectedAnswer.value) return
   showResult.value = true
   isCorrect.value = selectedAnswer.value === currentQuestion.value.answer
+  trapFeedback.value = null
 
   try {
-    await axios.post('http://localhost:8080/api/xingce/answer', {
+    const res = await axios.post('http://localhost:8080/api/xingce/answer', {
       userId: 1,
       questionId: currentQuestion.value.id,
       module: moduleCode.value,
@@ -109,6 +121,9 @@ const submitAnswer = async () => {
       timeCostSec: elapsed.value,
       isTrapOption: false
     })
+    if (res.data.trapFeedback) {
+      trapFeedback.value = res.data.trapFeedback
+    }
   } catch (e) { console.error('保存答题记录失败', e) }
 }
 
@@ -117,15 +132,40 @@ const nextQuestion = () => {
     currentIndex.value++
     selectedAnswer.value = null
     showResult.value = false
+    trapFeedback.value = null
     elapsed.value = 0
   }
+}
+
+const generateQuestions = async () => {
+  generating.value = true
+  try {
+    const res = await axios.post('http://localhost:8080/api/xingce/generate', {
+      userId: 1,
+      module: moduleCode.value,
+      count: 5
+    })
+    if (res.data.questions && res.data.questions.length > 0) {
+      questions.value = res.data.questions
+      currentIndex.value = 0
+      selectedAnswer.value = null
+      showResult.value = false
+      trapFeedback.value = null
+      elapsed.value = 0
+    }
+  } catch (e) { console.error('AI出题失败', e) }
+  generating.value = false
 }
 
 onMounted(async () => {
   timer = setInterval(() => { if (!showResult.value) elapsed.value++ }, 1000)
   try {
-    const res = await axios.get(`http://localhost:8080/api/xingce/questions/${moduleCode.value}`)
-    questions.value = res.data
+    const res = await axios.post('http://localhost:8080/api/xingce/generate', {
+      userId: 1,
+      module: moduleCode.value,
+      count: 5
+    })
+    questions.value = res.data.questions || []
   } catch (e) { console.error(e) }
   loading.value = false
 })
@@ -221,4 +261,26 @@ onUnmounted(() => { clearInterval(timer) })
 .submit-btn:disabled { background: #ccc; cursor: not-allowed; }
 .next-btn { background: #111; color: #fff; }
 .loading, .empty { text-align: center; padding: 60px 0; color: #999; }
+.trap-card {
+  margin-top: 12px;
+  padding: 14px 18px;
+  background: #fff2f0;
+  border: 1px solid #ffccc7;
+  border-radius: 10px;
+}
+.trap-title { font-weight: 700; color: #ff4d4f; margin-bottom: 6px; }
+.trap-text { color: #555; font-size: 0.9rem; line-height: 1.6; }
+.trap-count { color: #999; font-size: 0.8rem; margin-top: 8px; }
+.generate-btn {
+  padding: 14px 40px;
+  background: #111;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 16px;
+}
+.generate-btn:disabled { background: #ccc; cursor: not-allowed; }
 </style>
