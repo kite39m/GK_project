@@ -1,27 +1,40 @@
 <template>
   <div class="module-page">
-    <div class="module-header">
-      <button class="back-btn" @click="$router.push('/xingce')">← 返回</button>
-      <h2>{{ moduleName }}</h2>
-      <div class="timer">{{ formatTime(elapsed) }}</div>
+    <!-- Topbar -->
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="back-btn" @click="$router.push('/xingce')">← 返回</button>
+        <span class="topbar-label">{{ moduleName }}</span>
+        <div class="progress-track" v-if="questions.length > 0">
+          <div class="progress-fill" :style="{ width: ((currentIndex + 1) / questions.length * 100) + '%' }"></div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="timer-chip">
+          <span class="timer-label">计时</span>
+          <span class="timer-val">{{ formatTime(elapsed) }}</span>
+        </div>
+      </div>
     </div>
 
     <div v-if="loading" class="loading">加载中...</div>
 
-    <!-- 完成状态 -->
+    <!-- Finish state -->
     <div v-else-if="quizFinished" class="finish-area">
       <div class="finish-icon">✓</div>
       <h3>本轮练习完成</h3>
       <p class="finish-stats">共 {{ questions.length }} 题，答对 {{ correctCount }} 题，正确率 {{ accuracy }}%</p>
-      <button class="generate-btn" @click="restartQuiz" :disabled="generating">
+      <button class="btn-capsule btn-capsule--active" @click="restartQuiz" :disabled="generating">
         {{ generating ? 'AI 出题中...' : '再来一组' }}
       </button>
     </div>
 
+    <!-- Question area -->
     <div v-else-if="currentQuestion" class="question-area">
-      <div class="question-title">
-        <span>{{ currentQuestion.title }}</span>
-        <div class="question-meta">
+      <!-- Question card -->
+      <div class="question-card">
+        <div class="question-head">
+          <span class="q-badge">Q{{ currentIndex + 1 }}</span>
           <span v-if="currentQuestion.difficulty" class="difficulty">
             {{ '★'.repeat(currentQuestion.difficulty || 3) }}{{ '☆'.repeat(5 - (currentQuestion.difficulty || 3)) }}
           </span>
@@ -29,52 +42,68 @@
             {{ sourceLabel(currentQuestion.source) }}
           </span>
         </div>
+        <p class="q-text">{{ currentQuestion.title }}</p>
       </div>
+
+      <!-- Options -->
       <div class="options">
         <div
           v-for="(opt, idx) in parsedOptions"
           :key="idx"
           class="option"
           :class="{
-            selected: selectedAnswer === opt.label,
-            correct: showResult && opt.label === currentQuestion.answer,
-            wrong: showResult && selectedAnswer === opt.label && opt.label !== currentQuestion.answer
+            'option--selected': selectedAnswer === opt.label,
+            'option--correct': showResult && opt.label === currentQuestion.answer,
+            'option--wrong': showResult && selectedAnswer === opt.label && opt.label !== currentQuestion.answer
           }"
           @click="selectOption(opt.label)"
         >
-          <span class="opt-label">{{ opt.label }}</span>
+          <span class="opt-letter">{{ opt.label }}</span>
           <span class="opt-text">{{ opt.text }}</span>
+          <Transition name="check-pop">
+            <span v-if="selectedAnswer === opt.label && !showResult" class="opt-check">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </span>
+          </Transition>
         </div>
       </div>
 
+      <!-- Result area -->
       <div v-if="showResult" class="result-area">
-        <div class="result-tag" :class="isCorrect ? 'correct' : 'wrong'">
+        <div class="result-tag" :class="isCorrect ? 'result-tag--correct' : 'result-tag--wrong'">
           {{ isCorrect ? '✓ 回答正确' : '✗ 回答错误' }}
         </div>
-        <div class="analysis">{{ currentQuestion.analysis }}</div>
+        <p class="analysis-text">{{ currentQuestion.analysis }}</p>
 
-        <!-- 陷阱反馈卡片 -->
         <div v-if="trapFeedback && trapFeedback.trap" class="trap-card">
-          <div class="trap-title">⚠️ 陷阱警示</div>
-          <div class="trap-text">{{ trapFeedback.trapAnalysis }}</div>
+          <div class="trap-title">⚠ 陷阱警示</div>
+          <p class="trap-text">{{ trapFeedback.trapAnalysis }}</p>
           <div class="trap-count">该考点你已踩坑 {{ trapFeedback.trapCount }} 次</div>
         </div>
       </div>
 
-      <div class="actions">
-        <button v-if="!showResult" class="submit-btn" :disabled="!selectedAnswer" @click="submitAnswer">
+      <!-- Bottom button -->
+      <div class="bottom-bar">
+        <button
+          v-if="!showResult"
+          class="btn-capsule"
+          :class="{ 'btn-capsule--active': selectedAnswer }"
+          :disabled="!selectedAnswer"
+          @click="submitAnswer"
+        >
           提交答案
         </button>
-        <button v-else class="next-btn" @click="nextQuestion">
-          下一题 →
+        <button v-else class="btn-capsule btn-capsule--active" @click="nextQuestion">
+          {{ currentIndex === questions.length - 1 ? '查看结果' : '下一题' }}
         </button>
       </div>
     </div>
 
+    <!-- Empty state -->
     <div v-else class="empty">
       <p>该模块暂无题目</p>
       <p v-if="generateError" class="error-msg">{{ generateError }}</p>
-      <button class="generate-btn" @click="generateQuestions" :disabled="generating">
+      <button class="btn-capsule btn-capsule--active" @click="generateQuestions" :disabled="generating">
         {{ generating ? 'AI 出题中...' : 'AI 出题' }}
       </button>
     </div>
@@ -228,157 +257,417 @@ onUnmounted(() => { clearInterval(timer) })
 </script>
 
 <style scoped>
+/* ===== Page layout ===== */
 .module-page {
   max-width: 720px;
   margin: 0 auto;
-  padding: 32px 24px;
+  padding: var(--space-2) var(--space-3) var(--space-5);
+  background: var(--color-bg-page);
+  min-height: 100%;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
-.module-header {
+
+/* ===== Topbar ===== */
+.topbar {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 32px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
 }
+
+.topbar-left {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
 .back-btn {
   background: none;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 8px 16px;
+  border: 1px solid #eee;
+  border-radius: var(--radius-btn);
+  padding: 6px 14px;
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
+  color: var(--color-text-body);
+  transition: border-color 150ms;
 }
-.module-header h2 { flex: 1; margin: 0; font-size: 1.4rem; }
-.timer {
-  font-family: monospace;
-  font-size: 1.2rem;
-  color: #666;
+
+.back-btn:hover {
+  border-color: #ddd;
 }
-.question-title {
-  font-size: 1.1rem;
+
+.topbar-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-title);
+  white-space: nowrap;
+}
+
+.progress-track {
+  flex: 1;
+  height: 4px;
+  background: #eee;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #111;
+  border-radius: 2px;
+  transition: width 350ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.topbar-right {
+  display: flex;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.timer-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #111;
+  border-radius: var(--radius-btn);
+}
+
+.timer-label {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 500;
+}
+
+.timer-val {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+}
+
+/* ===== Question card ===== */
+.question-card {
+  background: var(--color-bg-card);
+  border: none;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4) var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.question-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+
+.q-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-text-caption);
+  background: #f5f5f5;
+  padding: 3px 10px;
+  border-radius: 6px;
+  letter-spacing: 0.02em;
+}
+
+.difficulty {
+  color: #faad14;
+  font-size: 0.85rem;
+}
+
+.source-tag {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #f0f0f0;
+  color: var(--color-text-caption);
+}
+
+.source-tag.REAL_EXAM { background: #e6f7ff; color: #1890ff; }
+.source-tag.AI_EXPAND { background: #fff7e6; color: #fa8c16; }
+.source-tag.AI_GEN { background: #f6ffed; color: #52c41a; }
+
+.q-text {
+  font-size: 1.05rem;
+  font-weight: 400;
+  color: var(--color-text-title);
   line-height: 1.7;
-  margin-bottom: 24px;
-  color: #222;
+  margin: 0;
 }
-.options { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+
+/* Long text modules: reduce Y padding */
+.question-card--compact {
+  padding: var(--space-3);
+}
+
+/* ===== Options ===== */
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+
 .option {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 18px;
-  border: 1px solid #e5e5e5;
-  border-radius: 12px;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 14px 16px;
+  background: #fafafa;
+  border: 1px solid #eee;
+  border-radius: var(--radius-btn);
+  font-size: 0.95rem;
+  color: var(--color-text-body);
   cursor: pointer;
-  transition: all 0.15s;
+  text-align: left;
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
 }
-.option:hover { border-color: #999; }
-.option.selected { border-color: #111; background: #f8f8f8; }
-.option.correct { border-color: #52c41a; background: #f6ffed; }
-.option.wrong { border-color: #ff4d4f; background: #fff2f0; }
-.opt-label {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: #f0f0f0;
+
+.option:hover {
+  background: #f5f5f5;
+  border-color: #ddd;
+  transform: translateY(-1px);
+}
+
+.option--selected {
+  background: #f5f5f5;
+  border-color: #111;
+  border-width: 1.5px;
+  padding: 13.5px 15.5px;
+  animation: selectPulse 150ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes selectPulse {
+  0% { transform: scale(0.98); }
+  100% { transform: scale(1); }
+}
+
+.option--correct {
+  background: #d1fae5;
+  border-color: #10b981;
+  color: #065f46;
+}
+
+.option--wrong {
+  background: #fee2e2;
+  border-color: #ef4444;
+  color: #991b1b;
+}
+
+.opt-letter {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 600;
-  font-size: 0.85rem;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #eee;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--color-text-caption);
   flex-shrink: 0;
+  transition: all 150ms;
 }
-.option.selected .opt-label { background: #111; color: #fff; }
-.option.correct .opt-label { background: #52c41a; color: #fff; }
-.option.wrong .opt-label { background: #ff4d4f; color: #fff; }
-.result-area {
-  background: #fafafa;
-  border-radius: 12px;
-  padding: 16px 20px;
-  margin-bottom: 20px;
-}
-.result-tag {
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-.result-tag.correct { color: #52c41a; }
-.result-tag.wrong { color: #ff4d4f; }
-.analysis { color: #666; font-size: 0.9rem; line-height: 1.6; }
-.actions { text-align: center; margin-top: 20px; }
-.submit-btn, .next-btn {
-  padding: 12px 40px;
-  border: none;
-  border-radius: 10px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-.submit-btn { background: #111; color: #fff; }
-.submit-btn:disabled { background: #ccc; cursor: not-allowed; }
-.next-btn { background: #111; color: #fff; }
-.loading, .empty { text-align: center; padding: 60px 0; color: #999; }
-.trap-card {
-  margin-top: 12px;
-  padding: 14px 18px;
-  background: #fff2f0;
-  border: 1px solid #ffccc7;
-  border-radius: 10px;
-}
-.trap-title { font-weight: 700; color: #ff4d4f; margin-bottom: 6px; }
-.trap-text { color: #555; font-size: 0.9rem; line-height: 1.6; }
-.trap-count { color: #999; font-size: 0.8rem; margin-top: 8px; }
-.generate-btn {
-  padding: 14px 40px;
+
+.option--selected .opt-letter {
   background: #111;
   color: #fff;
-  border: none;
-  border-radius: 10px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  margin-top: 16px;
 }
-.generate-btn:disabled { background: #ccc; cursor: not-allowed; }
-.error-msg { color: #ff4d4f; font-size: 0.9rem; margin-bottom: 12px; }
+
+.option--correct .opt-letter {
+  background: #10b981;
+  color: #fff;
+}
+
+.option--wrong .opt-letter {
+  background: #ef4444;
+  color: #fff;
+}
+
+.opt-text {
+  flex: 1;
+  font-weight: 500;
+}
+
+.opt-check {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  color: #111;
+}
+
+/* Check pop animation */
+.check-pop-enter-active {
+  transition: all 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.check-pop-leave-active {
+  transition: all 120ms ease-in;
+}
+.check-pop-enter-from, .check-pop-leave-to {
+  opacity: 0;
+  transform: scale(0.5);
+}
+
+/* ===== Result area ===== */
+.result-area {
+  background: #fafafa;
+  border-radius: var(--radius-card);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.result-tag {
+  font-weight: 600;
+  margin-bottom: var(--space-1);
+  font-size: 0.95rem;
+}
+
+.result-tag--correct { color: #10b981; }
+.result-tag--wrong { color: #ef4444; }
+
+.analysis-text {
+  color: var(--color-text-body);
+  font-size: 0.9rem;
+  line-height: 1.7;
+  margin: 0;
+}
+
+/* Trap card */
+.trap-card {
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  background: #fff2f0;
+  border: none;
+  border-radius: var(--radius-card);
+}
+
+.trap-title {
+  font-weight: 700;
+  color: #ef4444;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+}
+
+.trap-text {
+  color: var(--color-text-body);
+  font-size: 0.88rem;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.trap-count {
+  color: var(--color-text-caption);
+  font-size: 0.78rem;
+  margin-top: var(--space-1);
+}
+
+/* ===== Bottom button (capsule) ===== */
+.bottom-bar {
+  margin-top: var(--space-2);
+  display: flex;
+  justify-content: center;
+}
+
+.btn-capsule {
+  width: 100%;
+  padding: 14px var(--space-4);
+  background: #eee;
+  color: #bbb;
+  border: none;
+  border-radius: var(--radius-full);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: not-allowed;
+  transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-capsule--active {
+  background: #111;
+  color: #fff;
+  cursor: pointer;
+}
+
+.btn-capsule--active:hover {
+  background: #333;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+/* ===== Loading & Empty ===== */
+.loading, .empty {
+  text-align: center;
+  padding: 80px 0;
+  color: var(--color-text-caption);
+}
+
+.error-msg {
+  color: #ef4444;
+  font-size: 0.9rem;
+  margin-bottom: var(--space-2);
+}
+
+/* ===== Finish state ===== */
 .finish-area {
   text-align: center;
-  padding: 80px 24px;
+  padding: 80px var(--space-3);
 }
+
 .finish-icon {
   width: 64px;
   height: 64px;
   border-radius: 50%;
   background: #f6ffed;
-  color: #52c41a;
+  color: #10b981;
   font-size: 2rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 20px;
+  margin: 0 auto var(--space-3);
 }
+
 .finish-area h3 {
   font-size: 1.4rem;
-  margin: 0 0 8px;
-  color: #222;
+  margin: 0 0 var(--space-1);
+  color: var(--color-text-title);
 }
+
 .finish-stats {
-  color: #888;
+  color: var(--color-text-caption);
   font-size: 0.95rem;
-  margin: 0 0 28px;
+  margin: 0 0 var(--space-3);
 }
-.question-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
+
+/* ===== Responsive ===== */
+@media (max-width: 767px) {
+  .module-page {
+    padding: var(--space-2) var(--space-2) var(--space-4);
+  }
 }
-.difficulty { color: #faad14; font-size: 0.85rem; }
-.source-tag {
-  font-size: 0.75rem;
-  padding: 2px 8px;
-  border-radius: 4px;
-  background: #f0f0f0;
-  color: #666;
+
+@media (max-width: 640px) {
+  .topbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-1);
+  }
+  .topbar-right {
+    justify-content: flex-end;
+  }
+  .question-card {
+    padding: var(--space-3) var(--space-2);
+  }
+  .q-text {
+    font-size: 0.95rem;
+  }
 }
-.source-tag.REAL_EXAM { background: #e6f7ff; color: #1890ff; }
-.source-tag.AI_EXPAND { background: #fff7e6; color: #fa8c16; }
-.source-tag.AI_GEN { background: #f6ffed; color: #52c41a; }
 </style>
