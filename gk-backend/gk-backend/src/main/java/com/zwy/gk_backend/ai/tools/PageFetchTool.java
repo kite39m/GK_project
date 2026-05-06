@@ -3,10 +3,16 @@ package com.zwy.gk_backend.ai.tools;
 import dev.langchain4j.agent.tool.Tool;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 @Component
 public class PageFetchTool {
+
+    @Autowired
+    private ImageExtractor imageExtractor;
 
     @Tool("抓取指定URL的页面内容，返回纯文本。用于提取网页中的考试题目。")
     public String fetchPageContent(String url) {
@@ -23,5 +29,10 @@ public class PageFetchTool {
         } catch (Exception e) {
             return "抓取失败: " + e.getMessage();
         }
+    }
+
+    @Tool("从HTML页面中提取图片URL")
+    public List<String> extractImages(String html, String sourceUrl) {
+        return imageExtractor.extractFromPage(html, sourceUrl);
     }
 }
