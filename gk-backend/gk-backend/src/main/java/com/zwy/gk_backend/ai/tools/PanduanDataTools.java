@@ -23,7 +23,7 @@ public class PanduanDataTools {
     private final UserKnowledgeProfileMapper userKnowledgeProfileMapper;
 
     @Tool("获取用户在判断推理模块的最近错题明细，返回错题的考点、用户答案、是否陷阱选项、答题耗时等信息")
-    public String getRecentErrorDetails(
+    public String getPanduanErrorDetails(
             @P("用户ID") int userId,
             @P("获取数量，默认10条") int limit) {
         log.info("获取用户{}在判断推理模块的最近{}条错题", userId, limit);
@@ -54,7 +54,7 @@ public class PanduanDataTools {
     }
 
     @Tool("获取用户在判断推理模块的熟练度画像，返回各考点的熟练度、练习次数等信息")
-    public String getKnowledgeProfile(@P("用户ID") int userId) {
+    public String getPanduanKnowledgeProfile(@P("用户ID") int userId) {
         log.info("获取用户{}在判断推理模块的熟练度画像", userId);
 
         QueryWrapper<UserKnowledgeProfile> wrapper = new QueryWrapper<>();

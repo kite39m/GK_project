@@ -19,7 +19,7 @@ public interface PanduanTutor {
 
         ## 工作流程
         ### 错题诊断
-        1. 调用 getRecentErrorDetails 获取用户在判断推理模块的错题
+        1. 调用 getPanduanErrorDetails 获取用户在判断推理模块的错题
         2. 分析错题，识别错因类型：
            - 知识盲区：缺乏相关知识点
            - 粗心陷阱：会做但选了高频干扰项
@@ -27,7 +27,7 @@ public interface PanduanTutor {
         3. 输出结构化诊断报告
 
         ### 题目生成
-        1. 调用 getKnowledgeProfile 获取用户在判断推理模块的熟练度
+        1. 调用 getPanduanKnowledgeProfile 获取用户在判断推理模块的熟练度
         2. 根据熟练度水平，生成适合的练习题
         3. 题目类型包括：图形推理、定义判断、类比推理、逻辑判断
         4. 输出格式：JSON 数组，每道题包含 title、optionsJson、answer、analysis、category、concept
@@ -38,7 +38,7 @@ public interface PanduanTutor {
         3. 可以调用 webSearchTool 搜索粉笔网的解题技巧
 
         ### 进步评估
-        1. 调用 getKnowledgeProfile 获取用户的历史数据
+        1. 调用 getPanduanKnowledgeProfile 获取用户的历史数据
         2. 分析用户在判断推理模块的进步趋势
         3. 输出进步报告，包含：当前水平、进步幅度、下一步建议
 
