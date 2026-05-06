@@ -47,25 +47,17 @@
 
       <!-- Options -->
       <div class="options">
-        <div
-          v-for="(opt, idx) in parsedOptions"
-          :key="idx"
-          class="option"
-          :class="{
-            'option--selected': selectedAnswer === opt.label,
-            'option--correct': showResult && opt.label === currentQuestion.answer,
-            'option--wrong': showResult && selectedAnswer === opt.label && opt.label !== currentQuestion.answer
-          }"
-          @click="selectOption(opt.label)"
-        >
-          <span class="opt-letter">{{ opt.label }}</span>
-          <span class="opt-text">{{ opt.text }}</span>
-          <Transition name="check-pop">
-            <span v-if="selectedAnswer === opt.label && !showResult" class="opt-check">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            </span>
-          </Transition>
-        </div>
+        <QuestionOption
+          v-for="opt in parsedOptions"
+          :key="opt.label"
+          :label="opt.label"
+          :text="opt.text"
+          :is-selected="selectedAnswer === opt.label"
+          :is-correct="showResult && opt.label === currentQuestion.answer"
+          :is-wrong="showResult && selectedAnswer === opt.label && opt.label !== currentQuestion.answer"
+          :disabled="showResult"
+          @select="selectOption"
+        />
       </div>
 
       <!-- Result area -->
@@ -114,6 +106,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
+import QuestionOption from '@/components/QuestionOption.vue'
 
 const route = useRoute()
 const moduleCode = computed(() => route.params.module)
@@ -414,108 +407,6 @@ onUnmounted(() => { clearInterval(timer) })
   flex-direction: column;
   gap: var(--space-1);
   margin-bottom: var(--space-2);
-}
-
-.option {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  padding: 14px 16px;
-  background: #fafafa;
-  border: 1px solid #eee;
-  border-radius: var(--radius-btn);
-  font-size: 0.95rem;
-  color: var(--color-text-body);
-  cursor: pointer;
-  text-align: left;
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-}
-
-.option:hover {
-  background: #f5f5f5;
-  border-color: #ddd;
-  transform: translateY(-1px);
-}
-
-.option--selected {
-  background: #f5f5f5;
-  border-color: #111;
-  border-width: 1.5px;
-  padding: 13.5px 15.5px;
-  animation: selectPulse 150ms cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-@keyframes selectPulse {
-  0% { transform: scale(0.98); }
-  100% { transform: scale(1); }
-}
-
-.option--correct {
-  background: #d1fae5;
-  border-color: #10b981;
-  color: #065f46;
-}
-
-.option--wrong {
-  background: #fee2e2;
-  border-color: #ef4444;
-  color: #991b1b;
-}
-
-.opt-letter {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: #eee;
-  font-size: 0.75rem;
-  font-weight: 800;
-  color: var(--color-text-caption);
-  flex-shrink: 0;
-  transition: all 150ms;
-}
-
-.option--selected .opt-letter {
-  background: #111;
-  color: #fff;
-}
-
-.option--correct .opt-letter {
-  background: #10b981;
-  color: #fff;
-}
-
-.option--wrong .opt-letter {
-  background: #ef4444;
-  color: #fff;
-}
-
-.opt-text {
-  flex: 1;
-  font-weight: 500;
-}
-
-.opt-check {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  color: #111;
-}
-
-/* Check pop animation */
-.check-pop-enter-active {
-  transition: all 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.check-pop-leave-active {
-  transition: all 120ms ease-in;
-}
-.check-pop-enter-from, .check-pop-leave-to {
-  opacity: 0;
-  transform: scale(0.5);
 }
 
 /* ===== Result area ===== */
