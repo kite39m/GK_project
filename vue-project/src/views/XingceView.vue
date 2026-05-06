@@ -20,10 +20,40 @@
         <p class="module-desc">{{ mod.desc }}</p>
       </div>
     </div>
+
+    <!-- 判断推理辅导入口 -->
+    <div class="panduan-entry-section">
+      <div class="module-card panduan-card" @click="goToPanduan">
+        <div class="module-icon-wrapper">
+          <svg class="module-icon" width="48" height="48" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 16v-4"/>
+            <path d="M12 8h.01"/>
+          </svg>
+        </div>
+        <div class="panduan-card-text">
+          <h3 class="module-name">判断推理辅导</h3>
+          <p class="module-desc">AI 一对一辅导，专项突破判断推理</p>
+        </div>
+        <svg class="panduan-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+
+const goToPanduan = () => {
+  router.push('/panduan')
+}
+
 const modules = [
   {
     code: 'CHANGSHI',
@@ -145,6 +175,31 @@ const modules = [
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* 判断推理辅导入口 */
+.panduan-entry-section {
+  margin-top: var(--space-4);
+}
+
+.panduan-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.panduan-card-text {
+  flex: 1;
+}
+
+.panduan-arrow {
+  color: var(--color-text-caption);
+  flex-shrink: 0;
+  transition: transform 150ms ease;
+}
+
+.panduan-card:hover .panduan-arrow {
+  transform: translateX(4px);
 }
 
 /* Responsive */
