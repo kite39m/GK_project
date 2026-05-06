@@ -178,9 +178,35 @@ public class ImageExtractor {
     }
 
     /**
-     * 计算图片内容哈希
+     * 计算图片内容哈希（下载前 1KB 计算 MD5）
      */
     private String calculateHash(String url) {
+        try {
+            URL imageUrl = new URL(url);
+            HttpURLConnection connection = (HttpURLConnection) imageUrl.openConnection();
+            connection.setConnectTimeout(CONNECTION_TIMEOUT);
+            connection.setReadTimeout(READ_TIMEOUT);
+            connection.setRequestProperty("Range", "bytes=0-1023");
+
+            try (java.io.InputStream is = connection.getInputStream()) {
+                byte[] buffer = new byte[1024];
+                int bytesRead = is.read(buffer);
+                if (bytesRead > 0) {
+                    MessageDigest md = MessageDigest.getInstance("MD5");
+                    md.update(buffer, 0, bytesRead);
+                    byte[] hashBytes = md.digest();
+                    StringBuilder sb = new StringBuilder();
+                    for (byte b : hashBytes) {
+                        sb.append(String.format("%02x", b));
+                    }
+                    return sb.toString();
+                }
+            } finally {
+                connection.disconnect();
+            }
+        } catch (Exception e) {
+            // Fallback: hash URL string
+        }
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
             byte[] hashBytes = md.digest(url.getBytes());
