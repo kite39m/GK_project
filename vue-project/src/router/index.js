@@ -7,6 +7,7 @@ import XingceView from '../views/XingceView.vue'
 import XingceModuleView from '../views/XingceModuleView.vue'
 import ShenlunView from '../views/ShenlunView.vue'
 import ShenlunWriteView from '../views/ShenlunWriteView.vue'
+import PanduanView from '../views/PanduanView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -52,6 +53,12 @@ const router = createRouter({
       path: '/shenlun/write',
       name: 'shenlun-write',
       component: ShenlunWriteView
+    },
+    {
+      path: '/panduan',
+      name: 'Panduan',
+      component: PanduanView,
+      meta: { requiresAuth: true }
     }
   ]
 })
