@@ -7,10 +7,13 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.MessageDigest;
@@ -23,6 +26,8 @@ import java.util.regex.Pattern;
 
 @Component
 public class ImageExtractor {
+
+    private static final Logger log = LoggerFactory.getLogger(ImageExtractor.class);
 
     @Autowired
     private QuestionImageMapper imageMapper;
@@ -38,6 +43,7 @@ public class ImageExtractor {
     private static final int MIN_IMAGE_SIZE = 50;
     private static final int CONNECTION_TIMEOUT = 5000;
     private static final int READ_TIMEOUT = 5000;
+    private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
 
     /**
      * 从 HTML 页面提取图片 URL
@@ -62,16 +68,20 @@ public class ImageExtractor {
                 int width = parseDimension(widthStr);
                 int height = parseDimension(heightStr);
 
-                if (isRelevantImage(src, alt, width, height) && validateImage(src)) {
-                    String hash = calculateHash(src);
-                    if (!isDuplicate(hash)) {
-                        saveImage(src, hash, sourceUrl, "OPTION", width, height);
-                        imageUrls.add(src);
+                if (isRelevantImage(src, alt, width, height)) {
+                    String contentType = validateAndGetContentType(src);
+                    if (contentType != null) {
+                        String hash = calculateHash(src);
+                        if (!isDuplicate(hash)) {
+                            String format = extractFormatFromContentType(contentType);
+                            saveImage(src, hash, sourceUrl, "OPTION", format, width, height);
+                            imageUrls.add(src);
+                        }
                     }
                 }
             }
         } catch (Exception e) {
-            // 日志记录异常
+            log.warn("Failed to extract images from page: {}", sourceUrl, e);
         }
 
         return imageUrls;
@@ -90,7 +100,13 @@ public class ImageExtractor {
         Matcher matcher = IMAGE_URL_PATTERN.matcher(optionsJson);
         while (matcher.find()) {
             String url = matcher.group(1);
-            if (validateImage(url)) {
+            String contentType = validateAndGetContentType(url);
+            if (contentType != null) {
+                String hash = calculateHash(url);
+                if (!isDuplicate(hash)) {
+                    String format = extractFormatFromContentType(contentType);
+                    saveImage(url, hash, null, "OPTION", format, 0, 0);
+                }
                 imageUrls.add(url);
             }
         }
@@ -133,47 +149,53 @@ public class ImageExtractor {
     }
 
     /**
-     * 验证图片格式和大小
+     * 验证图片并返回 Content-Type，失败返回 null
      */
-    private boolean validateImage(String url) {
+    private String validateAndGetContentType(String url) {
         if (url == null || url.isEmpty()) {
-            return false;
+            return null;
         }
 
+        HttpURLConnection connection = null;
         try {
             URL imageUrl = new URL(url);
-            HttpURLConnection connection = (HttpURLConnection) imageUrl.openConnection();
+            connection = (HttpURLConnection) imageUrl.openConnection();
             connection.setRequestMethod("HEAD");
             connection.setConnectTimeout(CONNECTION_TIMEOUT);
             connection.setReadTimeout(READ_TIMEOUT);
             connection.setInstanceFollowRedirects(true);
+            connection.setRequestProperty("User-Agent", USER_AGENT);
 
             int responseCode = connection.getResponseCode();
             if (responseCode != HttpURLConnection.HTTP_OK) {
-                return false;
+                return null;
             }
 
             String contentType = connection.getContentType();
             if (contentType == null) {
-                return false;
+                return null;
             }
 
             // 检查是否为图片格式
             if (!contentType.startsWith("image/")) {
-                return false;
+                return null;
             }
 
             // 检查是否为支持的格式
             String format = contentType.substring(6).toLowerCase();
             if (!format.equals("jpeg") && !format.equals("jpg") &&
                 !format.equals("png") && !format.equals("gif")) {
-                return false;
+                return null;
             }
 
-            connection.disconnect();
-            return true;
+            return contentType;
         } catch (IOException e) {
-            return false;
+            log.debug("Failed to validate image URL: {}", url, e);
+            return null;
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
         }
     }
 
@@ -181,14 +203,16 @@ public class ImageExtractor {
      * 计算图片内容哈希（下载前 1KB 计算 MD5）
      */
     private String calculateHash(String url) {
+        HttpURLConnection connection = null;
         try {
             URL imageUrl = new URL(url);
-            HttpURLConnection connection = (HttpURLConnection) imageUrl.openConnection();
+            connection = (HttpURLConnection) imageUrl.openConnection();
             connection.setConnectTimeout(CONNECTION_TIMEOUT);
             connection.setReadTimeout(READ_TIMEOUT);
             connection.setRequestProperty("Range", "bytes=0-1023");
+            connection.setRequestProperty("User-Agent", USER_AGENT);
 
-            try (java.io.InputStream is = connection.getInputStream()) {
+            try (InputStream is = connection.getInputStream()) {
                 byte[] buffer = new byte[1024];
                 int bytesRead = is.read(buffer);
                 if (bytesRead > 0) {
@@ -201,12 +225,16 @@ public class ImageExtractor {
                     }
                     return sb.toString();
                 }
-            } finally {
-                connection.disconnect();
             }
         } catch (Exception e) {
-            // Fallback: hash URL string
+            log.debug("Failed to hash image content, falling back to URL hash: {}", url, e);
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
         }
+
+        // Fallback: hash URL string
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
             byte[] hashBytes = md.digest(url.getBytes());
@@ -233,13 +261,13 @@ public class ImageExtractor {
      * 保存图片信息
      */
     private void saveImage(String url, String hash, String sourcePage,
-                           String imageType, int width, int height) {
+                           String imageType, String format, int width, int height) {
         QuestionImage image = new QuestionImage();
         image.setUrl(url);
         image.setContentHash(hash);
         image.setSourcePage(sourcePage);
         image.setImageType(imageType);
-        image.setFormat(extractFormat(url));
+        image.setFormat(format);
         image.setWidth(width);
         image.setHeight(height);
         image.setStatus("ACTIVE");
@@ -247,21 +275,17 @@ public class ImageExtractor {
     }
 
     /**
-     * 从 URL 提取格式
+     * 从 Content-Type 提取格式
      */
-    private String extractFormat(String url) {
-        if (url == null) {
+    private String extractFormatFromContentType(String contentType) {
+        if (contentType == null) {
             return null;
         }
-        String lowerUrl = url.toLowerCase();
-        if (lowerUrl.endsWith(".jpg") || lowerUrl.endsWith(".jpeg")) {
+        String format = contentType.substring(6).toLowerCase();
+        if (format.equals("jpeg")) {
             return "jpg";
-        } else if (lowerUrl.endsWith(".png")) {
-            return "png";
-        } else if (lowerUrl.endsWith(".gif")) {
-            return "gif";
         }
-        return null;
+        return format;
     }
 
     /**
