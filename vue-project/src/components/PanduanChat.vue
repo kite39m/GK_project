@@ -83,12 +83,14 @@ const scrollToBottom = () => {
   })
 }
 
-const sendMessage = async () => {
-  const message = inputMessage.value.trim()
+const sendMessage = async (overrideMessage) => {
+  const message = overrideMessage || inputMessage.value.trim()
   if (!message || loading.value) return
 
-  // 添加用户消息
-  messages.value.push({ role: 'user', content: message })
+  // 添加用户消息（如果不是从 overrideMessage 传入的）
+  if (!overrideMessage) {
+    messages.value.push({ role: 'user', content: message })
+  }
   inputMessage.value = ''
   loading.value = true
   scrollToBottom()

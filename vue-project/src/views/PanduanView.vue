@@ -42,8 +42,8 @@ const goBack = () => {
 const handleAction = (btn) => {
   if (chatRef.value) {
     chatRef.value.addMessage('user', btn.message)
-    // 触发发送
-    chatRef.value.sendMessage()
+    // 触发发送，传入消息内容
+    chatRef.value.sendMessage(btn.message)
   }
 }
 
