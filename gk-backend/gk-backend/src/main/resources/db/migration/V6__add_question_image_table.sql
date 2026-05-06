@@ -2,7 +2,7 @@
 -- V6: 题目图片缓存表
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS question_image (
+CREATE TABLE question_image (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
     url VARCHAR(500) NOT NULL COMMENT '图片URL',
     content_hash VARCHAR(64) NOT NULL COMMENT '图片内容哈希（用于去重）',
