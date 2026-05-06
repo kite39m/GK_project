@@ -124,7 +124,8 @@ defineExpose({
   addMessage: (role, content) => {
     messages.value.push({ role, content })
     scrollToBottom()
-  }
+  },
+  sendMessage
 })
 </script>
 
