@@ -31,8 +31,17 @@ public class PageFetchTool {
         }
     }
 
-    @Tool("从HTML页面中提取图片URL")
-    public List<String> extractImages(String html, String sourceUrl) {
-        return imageExtractor.extractFromPage(html, sourceUrl);
+    @Tool("从指定URL的页面中提取图片URL。返回找到的图片URL列表。")
+    public List<String> extractImages(String url) {
+        try {
+            Document doc = Jsoup.connect(url)
+                    .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                    .timeout(15000)
+                    .get();
+            String html = doc.html();
+            return imageExtractor.extractFromPage(html, url);
+        } catch (Exception e) {
+            return List.of();
+        }
     }
 }
