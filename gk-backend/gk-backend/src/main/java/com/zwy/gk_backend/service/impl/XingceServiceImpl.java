@@ -108,7 +108,18 @@ public class XingceServiceImpl implements XingceService {
         List<Question> merged = new ArrayList<>();
         boolean fromCache = true;
 
-        // 1. 查询用户已答对的题目ID（排除用）
+        // 1. 读取用户知识点画像
+        QueryWrapper<UserKnowledgeProfile> profileQuery = new QueryWrapper<>();
+        profileQuery.eq("user_id", userId).eq("module", module);
+        List<UserKnowledgeProfile> profiles = profileMapper.selectList(profileQuery);
+
+        // 构建考点→熟练度映射
+        Map<String, Integer> conceptProficiency = new HashMap<>();
+        for (UserKnowledgeProfile p : profiles) {
+            conceptProficiency.put(p.getConcept(), p.getProficiency());
+        }
+
+        // 2. 查询用户已答对的题目ID（排除用）
         QueryWrapper<UserAnswerRecord> answeredQuery = new QueryWrapper<>();
         answeredQuery.eq("user_id", userId)
                      .eq("module", module)
@@ -120,7 +131,7 @@ public class XingceServiceImpl implements XingceService {
             correctIds.add(((Number) id).intValue());
         }
 
-        // 2. 查询用户答错的题目ID（错题优先用）
+        // 3. 查询用户答错的题目ID（错题优先用）
         QueryWrapper<UserAnswerRecord> wrongQuery = new QueryWrapper<>();
         wrongQuery.eq("user_id", userId)
                   .eq("module", module)
@@ -132,17 +143,95 @@ public class XingceServiceImpl implements XingceService {
             wrongIdSet.add(((Number) id).intValue());
         }
 
-        // 3. 从 ai_question_pool 检索（排除已答对 + 错题优先 + 随机）
+        // 4. 画像驱动选题：根据 proficiency 确定目标难度范围
+        // proficiency < 40 → difficulty 1-2（薄弱点强化）
+        // proficiency 40-70 → difficulty 2-4（巩固）
+        // proficiency > 70 → difficulty 3-5（挑战高难度）
+        int avgProficiency = 50; // 默认中等
+        if (!profiles.isEmpty()) {
+            avgProficiency = (int) profiles.stream()
+                    .mapToInt(UserKnowledgeProfile::getProficiency)
+                    .average()
+                    .orElse(50);
+        }
+
+        int minDifficulty, maxDifficulty;
+        if (avgProficiency < 40) {
+            minDifficulty = 1;
+            maxDifficulty = 2;
+        } else if (avgProficiency < 70) {
+            minDifficulty = 2;
+            maxDifficulty = 4;
+        } else {
+            minDifficulty = 3;
+            maxDifficulty = 5;
+        }
+
+        // 5. 多样性约束：确定需要覆盖的考点数量（2-3个）
+        int targetConceptCount = Math.min(3, Math.max(2, count / 2));
+
+        // 6. 从 ai_question_pool 检索（画像驱动 + 多样性 + 错题优先）
         QueryWrapper<AiQuestion> aiQuery = new QueryWrapper<>();
-        aiQuery.eq("module", module).eq("status", "ACTIVE");
+        aiQuery.eq("module", module)
+               .eq("status", "ACTIVE")
+               .ge("difficulty", minDifficulty)
+               .le("difficulty", maxDifficulty);
+
+        // 排除已答对的题目
         if (!correctIds.isEmpty()) {
             aiQuery.notIn("id", correctIds);
         }
+
+        // 优先选择薄弱考点的题目
+        List<String> weakConcepts = profiles.stream()
+                .filter(p -> p.getProficiency() < 40)
+                .map(UserKnowledgeProfile::getConcept)
+                .collect(Collectors.toList());
+
+        if (!weakConcepts.isEmpty()) {
+            aiQuery.in("concept", weakConcepts);
+        }
+
+        // 错题优先排序 + 随机
         String wrongIdsStr = wrongIdSet.isEmpty() ? "0" : wrongIdSet.stream().map(String::valueOf).collect(Collectors.joining(","));
-        aiQuery.last("ORDER BY CASE WHEN id IN (" + wrongIdsStr + ") THEN 0 ELSE 1 END, RAND() LIMIT " + count);
+        aiQuery.last("ORDER BY CASE WHEN id IN (" + wrongIdsStr + ") THEN 0 ELSE 1 END, RAND() LIMIT " + (count * 2)); // 多取一些用于多样性筛选
         List<AiQuestion> aiQuestions = aiQuestionMapper.selectList(aiQuery);
 
-        for (AiQuestion aiq : aiQuestions) {
+        // 7. 多样性筛选：确保覆盖不同考点
+        Map<String, List<AiQuestion>> byConcept = aiQuestions.stream()
+                .collect(Collectors.groupingBy(q -> q.getConcept() != null ? q.getConcept() : "unknown"));
+
+        List<AiQuestion> selectedAi = new ArrayList<>();
+        Set<String> coveredConcepts = new HashSet<>();
+
+        // 先从每个考点取1题，确保覆盖
+        for (Map.Entry<String, List<AiQuestion>> entry : byConcept.entrySet()) {
+            if (selectedAi.size() >= count) break;
+            if (coveredConcepts.size() >= targetConceptCount && !coveredConcepts.contains(entry.getKey())) continue;
+
+            List<AiQuestion> conceptQuestions = entry.getValue();
+            // 优先选择错题
+            conceptQuestions.sort((a, b) -> {
+                boolean aWrong = wrongIdSet.contains(a.getId().intValue());
+                boolean bWrong = wrongIdSet.contains(b.getId().intValue());
+                if (aWrong != bWrong) return aWrong ? -1 : 1;
+                return 0;
+            });
+
+            selectedAi.add(conceptQuestions.get(0));
+            coveredConcepts.add(entry.getKey());
+        }
+
+        // 再补充剩余题目
+        for (AiQuestion q : aiQuestions) {
+            if (selectedAi.size() >= count) break;
+            if (!selectedAi.contains(q)) {
+                selectedAi.add(q);
+            }
+        }
+
+        // 转换为 Question 对象
+        for (AiQuestion aiq : selectedAi) {
             Question q = new Question();
             q.setId(aiq.getId().intValue());
             q.setModule(aiq.getModule());
@@ -156,23 +245,32 @@ public class XingceServiceImpl implements XingceService {
             merged.add(q);
         }
 
-        // 4. 不足则从 question 正式题库补充（排除已答对 + 随机）
+        // 8. 不足则从 question 正式题库补充（画像驱动 + 多样性）
         if (merged.size() < count) {
             int remain = count - merged.size();
             Set<Integer> existingIds = merged.stream().map(Question::getId).collect(Collectors.toSet());
             existingIds.addAll(correctIds);
 
             QueryWrapper<Question> formalQuery = new QueryWrapper<>();
-            formalQuery.eq("module", module);
+            formalQuery.eq("module", module)
+                       .ge("difficulty", minDifficulty)
+                       .le("difficulty", maxDifficulty);
+
             if (!existingIds.isEmpty()) {
                 formalQuery.notIn("id", existingIds);
             }
+
+            // 优先薄弱考点
+            if (!weakConcepts.isEmpty() && coveredConcepts.size() < targetConceptCount) {
+                formalQuery.in("category", weakConcepts);
+            }
+
             formalQuery.last("ORDER BY RAND() LIMIT " + remain);
             List<Question> formal = questionMapper.selectList(formalQuery);
             merged.addAll(formal);
         }
 
-        // 5. 仍然不足 → 错题重练（允许已答对的错题重新出现）
+        // 9. 仍然不足 → 错题重练（允许已答对的错题重新出现）
         if (merged.size() < count && !wrongIdSet.isEmpty()) {
             int remain = count - merged.size();
             Set<Integer> existingIds = merged.stream().map(Question::getId).collect(Collectors.toSet());
@@ -187,11 +285,27 @@ public class XingceServiceImpl implements XingceService {
             merged.addAll(retry);
         }
 
+        // 10. 最终兜底：如果仍然不足，放宽难度限制
+        if (merged.size() < count) {
+            int remain = count - merged.size();
+            Set<Integer> existingIds = merged.stream().map(Question::getId).collect(Collectors.toSet());
+            existingIds.addAll(correctIds);
+
+            QueryWrapper<Question> fallbackQuery = new QueryWrapper<>();
+            fallbackQuery.eq("module", module);
+            if (!existingIds.isEmpty()) {
+                fallbackQuery.notIn("id", existingIds);
+            }
+            fallbackQuery.last("ORDER BY RAND() LIMIT " + remain);
+            List<Question> fallback = questionMapper.selectList(fallbackQuery);
+            merged.addAll(fallback);
+        }
+
         if (aiQuestions.isEmpty() && merged.isEmpty()) {
             fromCache = false;
         }
 
-        // 6. 统计池中总量
+        // 11. 统计池中总量
         QueryWrapper<AiQuestion> countQuery = new QueryWrapper<>();
         countQuery.eq("module", module).eq("status", "ACTIVE");
         int totalInPool = aiQuestionMapper.selectCount(countQuery).intValue();
@@ -200,7 +314,7 @@ public class XingceServiceImpl implements XingceService {
         result.setFromCache(fromCache);
         result.setTotalInPool(totalInPool);
 
-        // 7. 发布异步事件（补充题库）
+        // 12. 发布异步事件（补充题库）
         String moduleName = MODULE_NAMES.getOrDefault(module, module);
         eventPublisher.publishEvent(new QuestionGenerateEvent(this, userId, module, moduleName, count));
 

@@ -96,9 +96,14 @@ const sendMessage = async (overrideMessage) => {
   scrollToBottom()
 
   try {
-    const response = await fetch(`/api/panduan/chat?userId=${props.userId}`, {
+    const headers = { 'Content-Type': 'application/json' }
+    const token = localStorage.getItem('token')
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+    const response = await fetch(`http://localhost:8080/api/panduan/chat?userId=${props.userId}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ message })
     })
 

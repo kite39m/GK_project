@@ -1,0 +1,19 @@
+# OS
+desktop.ini
+Thumbs.db
+.DS_Store
+
+# IDE
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Compiled
+*.class
+
+# SQL temp
+clear_old_questions.sql
+
+# Claude local settings
+.claude/settings.local.json

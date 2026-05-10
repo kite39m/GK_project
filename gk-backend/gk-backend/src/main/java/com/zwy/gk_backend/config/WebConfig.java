@@ -27,7 +27,8 @@ public class WebConfig implements WebMvcConfigurer {
                         "/api/xingce/**",
                         "/api/shenlun/essay/submit",
                         "/api/shenlun/material/recommend",
-                        "/api/collector/**"
+                        "/api/collector/**",
+                        "/api/panduan/**"
                 );
     }
 }
